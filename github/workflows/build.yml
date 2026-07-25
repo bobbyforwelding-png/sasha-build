@@ -1,4 +1,4 @@
-name: Build Sasha v2 APK
+.github/workflows/build.yml: Build Sasha v2 APK
 on: [push, workflow_dispatch]
 jobs:
   build:
