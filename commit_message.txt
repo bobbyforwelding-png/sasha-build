@@ -1,1 +1,0 @@
-Update ProjectsScreen to condense categories and include the new Comms box, wiring it up to VaultViewModel.
