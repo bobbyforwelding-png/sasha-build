@@ -29,7 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -60,6 +59,45 @@ fun ConsoleScreen(viewModel: VaultViewModel) {
     val darkSurface = Color(0xFF111118)
     val darkCard = Color(0xFF1A1A24)
     val listState = rememberLazyListState()
+    val context = LocalContext.current
+    var isSpeaking by remember { mutableStateOf(false) }
+    var tts by remember { mutableStateOf<android.speech.tts.TextToSpeech?>(null) }
+    var ttsReady by remember { mutableStateOf(false) }
+
+    val speechLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            val spokenText = data?.get(0) ?: ""
+            viewModel.consoleInput = spokenText
+            viewModel.processConsoleCommand()
+        }
+    }
+
+    DisposableEffect(context) {
+        val engine = android.speech.tts.TextToSpeech(context) { status ->
+            if (status == android.speech.tts.TextToSpeech.SUCCESS) {
+                engine.language = java.util.Locale.US
+                ttsReady = true
+            }
+            tts = engine
+        }
+        onDispose { engine.stop(); engine.shutdown() }
+    }
+
+    fun speakConsoleResponse() {
+        val lastResponse = viewModel.consoleLog.lastOrNull { !it.startsWith("USER:") } ?: return
+        val clean = lastResponse.removePrefix("SASHA: ").trim()
+        if (clean.isBlank()) return
+        tts?.speak(clean, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "console_utterance")
+        isSpeaking = true
+        tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+            override fun onStart(id: String?) {}
+            override fun onDone(id: String?) { isSpeaking = false }
+            @Deprecated("Deprecated") override fun onError(id: String?) { isSpeaking = false }
+        })
+    }
 
     LaunchedEffect(viewModel.consoleLog.size) {
         if (viewModel.consoleLog.isNotEmpty()) {
@@ -98,6 +136,19 @@ fun ConsoleScreen(viewModel: VaultViewModel) {
         }
         Spacer(modifier = Modifier.height(8.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(
+                onClick = {
+                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                        putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak your command...")
+                    }
+                    speechLauncher.launch(intent)
+                },
+                modifier = Modifier.padding(end = 4.dp).background(Color(0xFF8B5CF6), RoundedCornerShape(8.dp))
+            ) {
+                Icon(Icons.Filled.Mic, contentDescription = "Voice Input", tint = Color.White, modifier = Modifier.size(20.dp))
+            }
+
             OutlinedTextField(
                 value = viewModel.consoleInput,
                 onValueChange = { viewModel.consoleInput = it },
@@ -113,7 +164,18 @@ fun ConsoleScreen(viewModel: VaultViewModel) {
                 textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace, fontSize = 12.sp),
                 shape = RoundedCornerShape(8.dp)
             )
-            Spacer(modifier = Modifier.width(8.dp))
+
+            IconButton(
+                onClick = { speakConsoleResponse() },
+                modifier = Modifier.padding(start = 4.dp, end = 4.dp).background(Color(0xFF1A1A24), RoundedCornerShape(8.dp)).border(1.dp, neonCyan.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+            ) {
+                Icon(
+                    if (isSpeaking) Icons.Filled.Pause else Icons.Filled.VolumeUp,
+                    contentDescription = if (isSpeaking) "Stop" else "Read Aloud",
+                    tint = neonCyan, modifier = Modifier.size(20.dp)
+                )
+            }
+
             Button(
                 onClick = { viewModel.processConsoleCommand() },
                 enabled = !viewModel.isLoading,
