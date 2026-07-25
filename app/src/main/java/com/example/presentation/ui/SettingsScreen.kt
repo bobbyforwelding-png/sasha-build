@@ -74,7 +74,7 @@ fun SettingsScreen(onClose: () -> Unit) {
             item { SettingsHeader("PROFILE") }
             item {
                 SettingsCard(
-                    title = "Alice Identity",
+                    title = "Sasha Identity",
                     subtitle = "Name, gender, voice, persona",
                     icon = Icons.Filled.Person,
                     color = NeonCyan,
@@ -204,7 +204,7 @@ fun SettingsScreen(onClose: () -> Unit) {
                     onClick = {
                         val intent = android.content.Intent(android.content.Intent.ACTION_SENDTO).apply {
                             data = android.net.Uri.parse("mailto:support@nicebros.ai")
-                            putExtra(android.content.Intent.EXTRA_SUBJECT, "Alice Support Request")
+                            putExtra(android.content.Intent.EXTRA_SUBJECT, "Sasha Support Request")
                         }
                         intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                         context.startActivity(intent)
@@ -213,7 +213,7 @@ fun SettingsScreen(onClose: () -> Unit) {
             }
             item {
                 SettingsCard(
-                    title = "Rate Alice",
+                    title = "Rate Sasha",
                     subtitle = "Love the app? Tell the world.",
                     icon = Icons.Filled.Star,
                     color = Color(0xFFFFD700),
@@ -224,7 +224,7 @@ fun SettingsScreen(onClose: () -> Unit) {
             item { Spacer(modifier = Modifier.height(16.dp)) }
             item {
                 Text(
-                    "Alice v2.0 — Crypto Trading Bot",
+                    "Sasha v2.0 — Crypto Trading Bot",
                     color = TextSecondary,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 10.sp,
@@ -235,8 +235,8 @@ fun SettingsScreen(onClose: () -> Unit) {
         }
     }
 
-    if (showAbout) SettingsDetailDialog("Alice Identity", onClose = { showAbout = false }) {
-        SettingsToggleRow("Name", "Alice", NeonCyan)
+    if (showAbout) SettingsDetailDialog("Sasha Identity", onClose = { showAbout = false }) {
+        SettingsToggleRow("Name", "Sasha", NeonCyan)
         SettingsToggleRow("Gender", "Female", NeonPink)
         SettingsToggleRow("Voice", "Sultry & confident", NeonPurple)
         SettingsToggleRow("Primary Persona", "Sasha — The Master", NeonCyan)

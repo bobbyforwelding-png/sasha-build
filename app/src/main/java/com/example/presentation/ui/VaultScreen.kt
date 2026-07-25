@@ -91,7 +91,7 @@ fun ConsoleScreen(viewModel: VaultViewModel) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(modifier = Modifier.size(14.dp), color = neonCyan, strokeWidth = 2.dp)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("ALICE PROCESSING...", color = neonCyan.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                        Text("SASHA PROCESSING...", color = neonCyan.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 11.sp)
                     }
                 }
             }
@@ -330,7 +330,7 @@ fun VaultChatTerminal(viewModel: VaultViewModel, uiState: VaultUiState) {
     Column(modifier = Modifier.fillMaxSize().background(Color.Black).padding(16.dp)) {
         Box(modifier = Modifier.weight(1f).border(2.dp, personaColor).padding(8.dp)) {
             Column(modifier = Modifier.fillMaxSize()) {
-                Text("ALICE CORE ONLINE | STATUS: SECURE", color = personaColor, modifier = Modifier.padding(bottom = 8.dp), fontFamily = FontFamily.Monospace)
+                Text("SASHA CORE ONLINE | STATUS: SECURE", color = personaColor, modifier = Modifier.padding(bottom = 8.dp), fontFamily = FontFamily.Monospace)
 
                 Box(modifier = Modifier.weight(1f)) {
                     when (activeVaultTab) {
@@ -452,7 +452,7 @@ fun VaultUnrestrictedChat(viewModel: VaultViewModel) {
     }
 
     fun speakWithVoice(text: String) {
-        val cleanText = text.removePrefix("ALICE: ").trim()
+        val cleanText = text.removePrefix("SASHA: ").trim()
         if (cleanText.isBlank()) return
         kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             var served = false
@@ -551,7 +551,7 @@ fun VaultUnrestrictedChat(viewModel: VaultViewModel) {
                             lineHeight = 16.sp,
                             modifier = Modifier.weight(1f)
                         )
-                        if (message.text.startsWith("ALICE:")) {
+                        if (message.text.startsWith("SASHA:")) {
                             IconButton(
                                 onClick = {
                                     if (isSpeaking) togglePausePlay() else speakWithVoice(message.text)
@@ -589,7 +589,7 @@ fun VaultUnrestrictedChat(viewModel: VaultViewModel) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(modifier = Modifier.size(14.dp), color = Color(0xFF8B5CF6), strokeWidth = 2.dp)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("ALICE PROCESSING...", color = Color(0xFF8B5CF6).copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                        Text("SASHA PROCESSING...", color = Color(0xFF8B5CF6).copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 11.sp)
                     }
                 }
             }
@@ -636,7 +636,7 @@ fun VaultUnrestrictedChat(viewModel: VaultViewModel) {
 
             IconButton(
                 onClick = {
-                    val lastResponse = viewModel.unrestrictedLog.lastOrNull()?.text?.replace("ALICE:", "") ?: ""
+                    val lastResponse = viewModel.unrestrictedLog.lastOrNull()?.text?.replace("SASHA:", "") ?: ""
                     if (isSpeaking) togglePausePlay() else speakWithVoice(lastResponse)
                 },
                 modifier = Modifier.padding(start = 4.dp).background(Color(0xFF1A1A24), RoundedCornerShape(8.dp)).border(1.dp, Color(0xFF00E5FF).copy(alpha = 0.3f), RoundedCornerShape(8.dp))
@@ -859,7 +859,7 @@ fun MainVaultDashboard(viewModel: VaultViewModel, uiState: VaultUiState) {
                 Box(modifier = Modifier.size(6.dp).background(neonCyan, RoundedCornerShape(50)))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    if (viewModel.isLoading) "ALICE PROCESSING..." else "ALICE ONLINE",
+                    if (viewModel.isLoading) "SASHA PROCESSING..." else "SASHA ONLINE",
                     color = if (viewModel.isLoading) Color(0xFFFBBF24) else neonCyan,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 10.sp,
@@ -867,7 +867,7 @@ fun MainVaultDashboard(viewModel: VaultViewModel, uiState: VaultUiState) {
                 )
                 Spacer(modifier = Modifier.weight(1f))
                 Text(
-                    "ALICE TRADING SYSTEM",
+                    "SASHA TRADING SYSTEM",
                     color = Color(0xFF555577),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 9.sp
@@ -1001,7 +1001,7 @@ fun PINEntryGate(viewModel: VaultViewModel, loginError: Boolean) {
     ) {
         Icon(Icons.Filled.Lock, contentDescription = "Locked", tint = VibrantBlue, modifier = Modifier.size(64.dp))
         Spacer(modifier = Modifier.height(16.dp))
-        Text("ALICE SYSTEM ACCESS", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace), color = VibrantBlue)
+        Text("SASHA SYSTEM ACCESS", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace), color = VibrantBlue)
         Text("RESTRICTED TERMINAL", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = VibrantBlue.copy(alpha = 0.5f))
         Spacer(modifier = Modifier.height(32.dp))
         OutlinedTextField(

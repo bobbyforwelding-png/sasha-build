@@ -61,7 +61,7 @@ class UpdateChecker(private val context: Context) {
 
     fun downloadUpdate(info: UpdateInfo): Long {
         val request = DownloadManager.Request(Uri.parse(info.downloadUrl))
-            .setTitle("Downloading Alice v${info.versionName}")
+            .setTitle("Downloading Sasha v${info.versionName}")
             .setDescription("Update: ${info.releaseNotes.take(100)}")
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
             .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "Sasha_v${info.versionName}.apk")

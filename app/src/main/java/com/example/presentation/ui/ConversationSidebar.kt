@@ -154,7 +154,7 @@ fun ConversationItem(
     onRename: (Conversation) -> Unit
 ) {
     val msgCount = convo.messages.size
-    val preview = convo.messages.lastOrNull { it.role == "ALICE" }?.text?.take(60) ?: ""
+    val preview = convo.messages.lastOrNull { it.role == "SASHA" }?.text?.take(60) ?: ""
 
     Row(
         modifier = Modifier

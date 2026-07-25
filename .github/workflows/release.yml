@@ -1,0 +1,83 @@
+name: Android Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag to publish (example: v4.0.0)"
+        required: true
+        type: string
+      release_name:
+        description: "Optional release title"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      GRADLE_HOME: /home/runner/work/gradle-8.7
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      - name: Install Gradle
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip
+          unzip -q gradle-8.7-bin.zip
+          mv gradle-8.7 /home/runner/work/gradle-8.7
+
+      - name: Generate signing keystore
+        run: keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Resolve release metadata
+        id: release_meta
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+          else
+            TAG_NAME="${{ github.event.inputs.tag_name }}"
+          fi
+
+          RELEASE_NAME="${{ github.event.inputs.release_name }}"
+          if [[ -z "${RELEASE_NAME}" ]]; then
+            RELEASE_NAME="Sasha App ${TAG_NAME}"
+          fi
+
+          APK_NAME="Sasha-App-${TAG_NAME}.apk"
+
+          echo "tag_name=${TAG_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "release_name=${RELEASE_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "apk_name=${APK_NAME}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build release APK
+        run: |
+          /home/runner/work/gradle-8.7/bin/gradle clean assembleRelease --stacktrace --info
+          cp app/build/outputs/apk/release/app-release.apk "${{ steps.release_meta.outputs.apk_name }}"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.release_meta.outputs.apk_name }}
+          path: ${{ steps.release_meta.outputs.apk_name }}
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_meta.outputs.tag_name }}
+          name: ${{ steps.release_meta.outputs.release_name }}
+          files: ${{ steps.release_meta.outputs.apk_name }}
+          generate_release_notes: true

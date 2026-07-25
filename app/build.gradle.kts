@@ -18,7 +18,7 @@ android {
     namespace = "com.example"
 
     defaultConfig {
-        applicationId = "com.aistudio.alice.v2"
+        applicationId = "com.aistudio.sasha.v2"
         minSdkVersion(24)
         targetSdkVersion(34)
         versionCode = 2

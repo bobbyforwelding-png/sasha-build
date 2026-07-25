@@ -47,7 +47,7 @@ data class Question(
 )
 
 private val onboardingQuestions = listOf(
-    Question("welcome", "Welcome to Alice", "A Digital Life Companion — Sealed, Encrypted, Yours.", null),
+    Question("welcome", "Welcome to Sasha", "A Digital Life Companion — Sealed, Encrypted, Yours.", null),
     Question("name", "What's your name?", "I need to know who I'm working for.", isTextInput = true, placeholder = "Enter your name"),
     Question("occupation", "What do you do?", "Your work shapes how I help you.", options = listOf("Business Owner", "Tradesman/Contractor", "Corporate/Office", "Healthcare", "Student", "Retired", "Creative/Freelance", "Other")),
     Question("financial", "What's your biggest financial goal?", "This drives my optimization engine.", options = listOf("Get out of debt", "Build savings", "Invest & grow wealth", "Start a business", "Retire early", "Pay off my house", "Build generational wealth")),
@@ -226,7 +226,7 @@ private fun WelcomeStep(glowAlpha: Float) {
         )
         Spacer(modifier = Modifier.height(24.dp))
         Text(
-            text = "Alice",
+            text = "Sasha",
             fontSize = 36.sp,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Black,

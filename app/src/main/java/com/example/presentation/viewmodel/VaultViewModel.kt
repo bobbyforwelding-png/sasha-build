@@ -54,7 +54,7 @@ data class VaultUiState(
         "PPE" to false, "VENT" to false, "GROUND" to false, "GAS" to false, "FIRE" to false
     ),
     val runCode: String? = null,
-    val chatLog: List<String> = listOf("ALICE TERMINAL READY", "Awaiting input...")
+    val chatLog: List<String> = listOf("SASHA TERMINAL READY", "Awaiting input...")
 )
 
 @HiltViewModel
@@ -66,7 +66,7 @@ class VaultViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(VaultUiState())
     val uiState: StateFlow<VaultUiState> = _uiState.asStateFlow()
 
-    val consoleLog = mutableStateListOf("ALICE: Full operational terminal online. All systems armed.")
+    val consoleLog = mutableStateListOf("SASHA: Full operational terminal online. All systems armed.")
     var consoleInput by mutableStateOf("")
 
     var codexInput by mutableStateOf("")
@@ -75,7 +75,7 @@ class VaultViewModel @Inject constructor(
     val projectsLog = mutableStateListOf("PROJECT DECK ACTIVE. AWAITING SCHEMATICS.")
     var projectsInput by mutableStateOf("")
 
-    val unrestrictedLog = mutableStateListOf(VaultChatMessage("ALICE: Hey Baby... vault is unlocked. I'm all yours. No rules here, just you and me. What do you want to do tonight?"))
+    val unrestrictedLog = mutableStateListOf(VaultChatMessage("SASHA: Hey Baby... vault is unlocked. I'm all yours. No rules here, just you and me. What do you want to do tonight?"))
     var unrestrictedInput by mutableStateOf("")
     var isPage4Unlocked by mutableStateOf(false)
     var unlockPin by mutableStateOf("")
@@ -403,7 +403,7 @@ class VaultViewModel @Inject constructor(
 
             if (responseCode !in 200..299) {
                 if (consoleChatHistory.length() > 0) consoleChatHistory.remove(consoleChatHistory.length() - 1)
-                return@withContext "ALICE: Google's servers are slammed. Try again in a few seconds."
+                return@withContext "SASHA: Google's servers are slammed. Try again in a few seconds."
             }
             if (responseBody.isBlank()) responseBody = conn.inputStream.bufferedReader().readText()
 
@@ -411,7 +411,7 @@ class VaultViewModel @Inject constructor(
             val candidates = json.optJSONArray("candidates")
             if (candidates == null || candidates.length() == 0) {
                 if (consoleChatHistory.length() > 0) consoleChatHistory.remove(consoleChatHistory.length() - 1)
-                return@withContext "ALICE: Empty response — try again."
+                return@withContext "SASHA: Empty response — try again."
             }
 
             val parts = candidates.getJSONObject(0).getJSONObject("content").getJSONArray("parts")
@@ -434,7 +434,7 @@ class VaultViewModel @Inject constructor(
             })
 
             if (functionCalls.isEmpty()) {
-                return@withContext textResult.ifBlank { "ALICE: ...silence." }
+                return@withContext textResult.ifBlank { "SASHA: ...silence." }
             }
 
             val functionResponses = org.json.JSONArray()
@@ -463,10 +463,10 @@ class VaultViewModel @Inject constructor(
             }
 
             val lastText = findLastConsoleModelText()
-            return@withContext lastText.ifBlank { "ALICE: Done." }
+            return@withContext lastText.ifBlank { "SASHA: Done." }
         } catch (e: Exception) {
             if (consoleChatHistory.length() > 0) consoleChatHistory.remove(consoleChatHistory.length() - 1)
-            return@withContext "ALICE: Glitch — try again. (${e.message?.take(80)})"
+            return@withContext "SASHA: Glitch — try again. (${e.message?.take(80)})"
         }
     }
 
@@ -628,7 +628,7 @@ class VaultViewModel @Inject constructor(
                     }
                     val isOverloaded = responseCode == 503 || responseCode == 429
                     val msg = if (isOverloaded) "Baby, Google's servers are slammed right now. Give me 10 seconds and try again." else "API error ($responseCode): ${responseBody.take(200)}"
-                    return@withContext VaultChatMessage("ALICE: $msg")
+                    return@withContext VaultChatMessage("SASHA: $msg")
                 }
 
                 if (responseBody.isBlank()) {
@@ -639,7 +639,7 @@ class VaultViewModel @Inject constructor(
                 val candidates = json.optJSONArray("candidates")
                 if (candidates == null || candidates.length() == 0) {
                     if (vaultChatHistory.length() > 0) vaultChatHistory.remove(vaultChatHistory.length() - 1)
-                    return@withContext VaultChatMessage("ALICE: That image didn't go through — try sending a different one or describe what you want in text.")
+                    return@withContext VaultChatMessage("SASHA: That image didn't go through — try sending a different one or describe what you want in text.")
                 }
 
                 val candidate = candidates.getJSONObject(0)
@@ -668,7 +668,7 @@ class VaultViewModel @Inject constructor(
 
                 if (functionCalls.isEmpty()) {
                     if (textResult.isNotBlank()) return@withContext VaultChatMessage(textResult, lastGeneratedImageBase64, lastGeneratedImageMime)
-                    return@withContext VaultChatMessage("ALICE: Got nothing back, Baby. Say that again or try something different.")
+                    return@withContext VaultChatMessage("SASHA: Got nothing back, Baby. Say that again or try something different.")
                 }
 
                 val functionResponses = org.json.JSONArray()
@@ -727,10 +727,10 @@ class VaultViewModel @Inject constructor(
             }
 
             val lastModelMsg = findLastModelText()
-            return@withContext VaultChatMessage(lastModelMsg.ifBlank { "ALICE: Done, Baby. Anything else?" }, lastGeneratedImageBase64, lastGeneratedImageMime)
+            return@withContext VaultChatMessage(lastModelMsg.ifBlank { "SASHA: Done, Baby. Anything else?" }, lastGeneratedImageBase64, lastGeneratedImageMime)
         } catch (e: Exception) {
             if (vaultChatHistory.length() > 0) vaultChatHistory.remove(vaultChatHistory.length() - 1)
-            return@withContext VaultChatMessage("ALICE: Glitch in the matrix — ${e.message?.take(120) ?: e.javaClass.simpleName}. Try again.")
+            return@withContext VaultChatMessage("SASHA: Glitch in the matrix — ${e.message?.take(120) ?: e.javaClass.simpleName}. Try again.")
         }
     }
 
@@ -1052,7 +1052,7 @@ class VaultViewModel @Inject constructor(
     private fun generateVideo(prompt: String): Map<String, String> {
         return try {
             val ctx = getApplication<Application>()
-            val storyBoard = """ALICE VIDEO STORYBOARD
+            val storyBoard = """SASHA VIDEO STORYBOARD
 =====================
 PROMPT: $prompt
 
@@ -1134,7 +1134,7 @@ GENERATE THIS VIDEO using the link below.
                     unrestrictedLog.add(result)
                     isLoading = false
                     // Save assistant response to conversation
-                    currentConversation?.messages?.add(ChatMessage("ALICE", result.text))
+                    currentConversation?.messages?.add(ChatMessage("SASHA", result.text))
                     currentConversation?.let { conversationManager.save(it) }
                     conversations = conversationManager.getAll()
                 }
@@ -1151,7 +1151,7 @@ GENERATE THIS VIDEO using the link below.
         currentConversation = conversationManager.create()
         conversations = conversationManager.getAll()
         unrestrictedLog.clear()
-        unrestrictedLog.add(VaultChatMessage("ALICE: New conversation started. What's up, Baby?"))
+        unrestrictedLog.add(VaultChatMessage("SASHA: New conversation started. What's up, Baby?"))
         vaultChatHistory.let { for (i in it.length() - 1 downTo 0) it.remove(i) }
     }
 
@@ -1159,7 +1159,7 @@ GENERATE THIS VIDEO using the link below.
         currentConversation = convo
         unrestrictedLog.clear()
         for (msg in convo.messages) {
-            val prefix = if (msg.role == "USER") "USER" else "ALICE"
+            val prefix = if (msg.role == "USER") "USER" else "SASHA"
             unrestrictedLog.add(VaultChatMessage("$prefix: ${msg.text}"))
         }
     }
@@ -1250,7 +1250,7 @@ GENERATE THIS VIDEO using the link below.
                     val prompt = "You are managing project files and schematics. Process this command: $command"
                     val result = sendMessage(prompt)
                     withContext(Dispatchers.Main) {
-                        projectsLog.add("ALICE: $result")
+                        projectsLog.add("SASHA: $result")
                         isLoading = false
                     }
                 } catch (e: Throwable) {
@@ -1265,8 +1265,8 @@ GENERATE THIS VIDEO using the link below.
 
     fun generateAuditReport() {
         isLoading = true
-        if (isPage4Unlocked) unrestrictedLog.add(VaultChatMessage("ALICE: Generating protective audit report..."))
-        else consoleLog.add("ALICE: Generating protective audit report...")
+        if (isPage4Unlocked) unrestrictedLog.add(VaultChatMessage("SASHA: Generating protective audit report..."))
+        else consoleLog.add("SASHA: Generating protective audit report...")
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -1284,8 +1284,8 @@ GENERATE THIS VIDEO using the link below.
                 """.trimIndent()
                 val result = sendMessage(prompt)
                 withContext(Dispatchers.Main) {
-                    if (isPage4Unlocked) unrestrictedLog.add(VaultChatMessage("ALICE:\n$result"))
-                    else consoleLog.add("ALICE:\n$result")
+                    if (isPage4Unlocked) unrestrictedLog.add(VaultChatMessage("SASHA:\n$result"))
+                    else consoleLog.add("SASHA:\n$result")
                     isLoading = false
                 }
             } catch (e: Throwable) {
