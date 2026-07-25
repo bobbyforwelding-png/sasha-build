@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<style>
+  * { margin:0; padding:0; }
+  body { background:#000; overflow:hidden; width:100vw; height:100vh; }
+  canvas { display:block; }
+  #loading { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:#00bfff; font-family:monospace; font-size:12px; z-index:99; }
+</style>
+</head>
+<body>
+<div id="loading">INITIALIZING...</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+document.getElementById('loading').style.display='none';
+
+const W = window.innerWidth, H = window.innerHeight;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(35, W/H, 0.1, 100);
+camera.position.set(0, 0.3, 3.2);
+camera.lookAt(0, 0.1, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+renderer.setSize(W, H);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x000000, 0);
+document.body.appendChild(renderer.domElement);
+
+const amb = new THREE.AmbientLight(0x1a1a4e, 0.6);
+scene.add(amb);
+const light1 = new THREE.PointLight(0x00bfff, 1.8, 15);
+light1.position.set(1.5, 1.5, 3);
+scene.add(light1);
+const light2 = new THREE.PointLight(0x8b5cf6, 0.8, 15);
+light2.position.set(-1.5, -0.5, 2);
+scene.add(light2);
+const rim = new THREE.PointLight(0x00bfff, 0.5, 10);
+rim.position.set(0, 0, -2);
+scene.add(rim);
+
+const head = new THREE.Group();
+scene.add(head);
+
+// Build face geometry from custom vertices
+const faceShape = new THREE.Shape();
+const headGeo = new THREE.BufferGeometry();
+
+// Face mesh - custom shape with jaw, cheeks, forehead
+const faceVerts = [];
+const faceIndices = [];
+
+// Face outline points (right side, mirrored)
+const outline = [
+    [0, 0.85],     // top of forehead
+    [0.25, 0.82],
+    [0.42, 0.72],  // temple
+    [0.48, 0.58],  // cheekbone upper
+    [0.50, 0.42],  // cheekbone
+    [0.47, 0.28],  // cheek
+    [0.40, 0.15],  // jaw upper
+    [0.30, 0.02],  // jaw
+    [0.18, -0.08], // jaw lower
+    [0.08, -0.14], // chin side
+    [0, -0.18],    // chin tip
+];
+
+// Generate face mesh from outline
+const segX = 16, segY = 20;
+for (let iy = 0; iy <= segY; iy++) {
+    const v = iy / segY;
+    const y = -0.18 + v * 1.03;
+    let width = 0;
+    for (let i = 0; i < outline.length - 1; i++) {
+        if (y >= outline[i+1][1] && y <= outline[i][1]) {
+            const t = (y - outline[i+1][1]) / (outline[i][1] - outline[i+1][1]);
+            width = outline[i+1][0] + t * (outline[i][0] - outline[i+1][0]);
+            break;
+        }
+    }
+    if (y > 0.85) {
+        const t = (y - 0.85) / (1.03 - 0.85);
+        width = 0.25 * (1 - t);
+    }
+
+    for (let ix = 0; ix <= segX; ix++) {
+        const u = ix / segX;
+        const x = -width + u * width * 2;
+        // Face curvature - more depth at nose, less at edges
+        const noseDist = Math.abs(x) / Math.max(width, 0.01);
+        const browBulge = Math.max(0, 1 - noseDist * 1.5) * 0.15;
+        const cheekBulge = Math.max(0, 1 - noseDist * 2) * 0.08;
+        const chinRecess = y < 0 ? Math.max(0, 1 - Math.abs(x)/0.1) * 0.05 : 0;
+
+        let z = 0.3 * (1 - noseDist * noseDist); // base curvature
+        // Forehead bulge
+        if (y > 0.5) z += browBulge * (1 - (y - 0.5) * 1.5);
+        // Brow ridge
+        if (y > 0.35 && y < 0.5) z += 0.06;
+        // Nose bridge
+        if (Math.abs(x) < 0.06 && y > 0.1 && y < 0.45) z += 0.12 - Math.abs(x) * 1.5;
+        // Nose tip
+        if (Math.abs(x) < 0.05 && y > 0.0 && y < 0.15) z += 0.18 * (1 - Math.abs(x)/0.05);
+        // Cheek
+        if (y > 0.1 && y < 0.4 && Math.abs(x) > 0.15) z += cheekBulge;
+        // Upper lip area - slight forward
+        if (y > -0.05 && y < 0.05 && Math.abs(x) < 0.12) z += 0.04;
+        // Chin
+        if (y < -0.05) z -= chinRecess;
+        // Eye sockets - depress
+        if (y > 0.2 && y < 0.42) {
+            const eyeX = (Math.abs(x) > 0.08 && Math.abs(x) < 0.22);
+            if (eyeX) z -= 0.04;
+        }
+
+        faceVerts.push(x, y, z);
+    }
+}
+
+// Generate triangles
+for (let iy = 0; iy < segY; iy++) {
+    for (let ix = 0; ix < segX; ix++) {
+        const a = iy * (segX + 1) + ix;
+        const b = a + 1;
+        const c = a + (segX + 1);
+        const d = c + 1;
+        faceIndices.push(a, c, b, b, c, d);
+    }
+}
+
+headGeo.setAttribute('position', new THREE.Float32BufferAttribute(faceVerts, 3));
+headGeo.setIndex(faceIndices);
+headGeo.computeVertexNormals();
+
+const faceMat = new THREE.MeshPhongMaterial({
+    color: 0x0a0a2e,
+    emissive: 0x001133,
+    specular: 0x00bfff,
+    shininess: 80,
+    transparent: true,
+    opacity: 0.7,
+    side: THREE.DoubleSide
+});
+const faceMesh = new THREE.Mesh(headGeo, faceMat);
+head.add(faceMesh);
+
+// Wireframe overlay
+const wireMat = new THREE.MeshBasicMaterial({ color: 0x00bfff, wireframe: true, transparent: true, opacity: 0.15 });
+const wireMesh = new THREE.Mesh(headGeo.clone(), wireMat);
+head.add(wireMesh);
+
+// EYES
+function createEye(x, y) {
+    const eyeGroup = new THREE.Group();
+    eyeGroup.position.set(x, y, 0.32);
+
+    // Eyeball
+    const ballGeo = new THREE.SphereGeometry(0.055, 16, 16);
+    const ballMat = new THREE.MeshPhongMaterial({ color: 0x112244, emissive: 0x001122, specular: 0x4488ff, shininess: 120 });
+    const ball = new THREE.Mesh(ballGeo, ballMat);
+    eyeGroup.add(ball);
+
+    // Iris
+    const irisGeo = new THREE.CircleGeometry(0.035, 24);
+    const irisMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
+    const iris = new THREE.Mesh(irisGeo, irisMat);
+    iris.position.z = 0.04;
+    eyeGroup.add(iris);
+
+    // Pupil
+    const pupilGeo = new THREE.CircleGeometry(0.015, 16);
+    const pupilMat = new THREE.MeshBasicMaterial({ color: 0x000011 });
+    const pupil = new THREE.Mesh(pupilGeo, pupilMat);
+    pupil.position.z = 0.045;
+    eyeGroup.add(pupil);
+
+    // Eye glow
+    const glowGeo = new THREE.SphereGeometry(0.08, 16, 16);
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0x00bfff, transparent: true, opacity: 0.15 });
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    eyeGroup.add(glow);
+
+    // Eyelids
+    const lidGeo = new THREE.RingGeometry(0.03, 0.06, 24, 1, 0, Math.PI);
+    const lidMat = new THREE.MeshBasicMaterial({ color: 0x00bfff, transparent: true, opacity: 0.3 });
+    const topLid = new THREE.Mesh(lidGeo, lidMat);
+    topLid.position.set(0, 0.02, 0.04);
+    topLid.rotation.z = Math.PI;
+    eyeGroup.add(topLid);
+
+    return { group: eyeGroup, iris: irisMat, glow: glowMat, ball: ballMat };
+}
+
+const leftEye = createEye(-0.14, 0.30);
+const rightEye = createEye(0.14, 0.30);
+head.add(leftEye.group);
+head.add(rightEye.group);
+
+// EYEBROWS
+function createBrow(x, y, flip) {
+    const pts = [new THREE.Vector3(-0.1, 0, 0), new THREE.Vector3(-0.03, 0.025, 0), new THREE.Vector3(0.05, 0.02, 0), new THREE.Vector3(0.1, -0.01, 0)];
+    const curve = new THREE.CatmullRomCurve3(pts);
+    const geo = new THREE.TubeGeometry(curve, 16, 0.008, 6, false);
+    const mat = new THREE.MeshBasicMaterial({ color: 0x00bfff, transparent: true, opacity: 0.6 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, y, 0.34);
+    if (flip) mesh.scale.x = -1;
+    return { mesh, mat };
+}
+
+const leftBrow = createBrow(-0.14, 0.42, false);
+const rightBrow = createBrow(0.14, 0.42, true);
+head.add(leftBrow.mesh);
+head.add(rightBrow.mesh);
+
+// NOSE
+const nosePts = [new THREE.Vector3(0, 0.28, 0.35), new THREE.Vector3(0, 0.18, 0.42), new THREE.Vector3(0, 0.08, 0.45), new THREE.Vector3(0, 0.02, 0.44)];
+const noseCurve = new THREE.CatmullRomCurve3(nosePts);
+const noseGeo = new THREE.TubeGeometry(noseCurve, 16, 0.006, 6, false);
+const noseMat = new THREE.MeshBasicMaterial({ color: 0x00bfff, transparent: true, opacity: 0.35 });
+const nose = new THREE.Mesh(noseGeo, noseMat);
+head.add(nose);
+
+// Nose tip accent
+const tipGeo = new THREE.SphereGeometry(0.012, 8, 8);
+const tipMat = new THREE.MeshBasicMaterial({ color: 0x00bfff, transparent: true, opacity: 0.5 });
+const noseTip = new THREE.Mesh(tipGeo, tipMat);
+noseTip.position.set(0, 0.02, 0.45);
+head.add(noseTip);
+
+// LIPS
+function createLip(points, y, thickness) {
+    const pts = points.map(p => new THREE.Vector3(p[0], p[1] + y, 0.36 + Math.abs(p[0]) * -0.1));
+    const curve = new THREE.CatmullRomCurve3(pts);
+    const geo = new THREE.TubeGeometry(curve, 20, thickness, 6, false);
+    const mat = new THREE.MeshBasicMaterial({ color: 0x00bfff, transparent: true, opacity: 0.5 });
+    return new THREE.Mesh(geo, mat);
+}
+
+const upperLip = createLip([[-0.1, 0.015], [-0.06, 0.035], [-0.02, 0.025], [0, 0.04], [0.02, 0.025], [0.06, 0.035], [0.1, 0.015]], -0.1, 0.005);
+const lowerLip = createLip([[-0.08, -0.005], [-0.04, -0.025], [0, -0.03], [0.04, -0.025], [0.08, -0.005]], -0.1, 0.006);
+head.add(upperLip);
+head.add(lowerLip);
+
+// Mouth line
+const mouthPts = [new THREE.Vector3(-0.07, -0.1, 0.37), new THREE.Vector3(-0.03, -0.105, 0.39), new THREE.Vector3(0, -0.108, 0.40), new THREE.Vector3(0.03, -0.105, 0.39), new THREE.Vector3(0.07, -0.1, 0.37)];
+const mouthCurve = new THREE.CatmullRomCurve3(mouthPts);
+const mouthGeo = new THREE.TubeGeometry(mouthCurve, 16, 0.004, 6, false);
+const mouthMat = new THREE.MeshBasicMaterial({ color: 0x00bfff, transparent: true, opacity: 0.6 });
+const mouth = new THREE.Mesh(mouthGeo, mouthMat);
+head.add(mouth);
+
+// HAIR - flowing strands from top
+function createStrand(startX, startY, length, curve) {
+    const pts = [];
+    for (let i = 0; i <= 8; i++) {
+        const t = i / 8;
+        pts.push(new THREE.Vector3(
+            startX + Math.sin(t * curve) * 0.05,
+            startY - t * length,
+            0.2 - t * 0.15
+        ));
+    }
+    const c = new THREE.CatmullRomCurve3(pts);
+    const geo = new THREE.TubeGeometry(c, 12, 0.003, 4, false);
+    const mat = new THREE.MeshBasicMaterial({ color: 0x00bfff, transparent: true, opacity: 0.4 });
+    return new THREE.Mesh(geo, mat);
+}
+
+for (let i = -6; i <= 6; i++) {
+    const x = i * 0.035;
+    const len = 0.3 + Math.abs(i) * 0.02;
+    const strand = createStrand(x, 0.85, len, (i * 0.3) + 0.5);
+    head.add(strand);
+}
+
+// Side hair
+for (let side = -1; side <= 1; side += 2) {
+    for (let i = 0; i < 5; i++) {
+        const s = createStrand(side * 0.45, 0.7 - i * 0.08, 0.4 + i * 0.05, side * (1 + i * 0.2));
+        head.add(s);
+    }
+}
+
+// NECK hint
+const neckGeo = new THREE.CylinderGeometry(0.08, 0.1, 0.2, 12);
+const neckMat = new THREE.MeshBasicMaterial({ color: 0x00bfff, transparent: true, opacity: 0.2 });
+const neck = new THREE.Mesh(neckGeo, neckMat);
+neck.position.set(0, -0.3, 0.15);
+head.add(neck);
+
+// Orbital rings
+const ringMat1 = new THREE.MeshBasicMaterial({ color: 0x00bfff, transparent: true, opacity: 0.25 });
+const ring1 = new THREE.Mesh(new THREE.TorusGeometry(1.1, 0.005, 8, 64), ringMat1);
+scene.add(ring1);
+const ring2 = new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.004, 8, 64), new THREE.MeshBasicMaterial({ color: 0x8b5cf6, transparent: true, opacity: 0.18 }));
+scene.add(ring2);
+const ring3 = new THREE.Mesh(new THREE.TorusGeometry(1.4, 0.003, 8, 64), new THREE.MeshBasicMaterial({ color: 0x00bfff, transparent: true, opacity: 0.12 }));
+scene.add(ring3);
+
+// Particles
+const pCount = 150;
+const pGeo = new THREE.BufferGeometry();
+const pPos = new Float32Array(pCount * 3);
+const pSpeed = new Float32Array(pCount);
+for (let i = 0; i < pCount; i++) {
+    const th = Math.random() * Math.PI * 2;
+    const ph = Math.random() * Math.PI;
+    const r = 1.2 + Math.random() * 2;
+    pPos[i*3] = r * Math.sin(ph) * Math.cos(th);
+    pPos[i*3+1] = r * Math.sin(ph) * Math.sin(th);
+    pPos[i*3+2] = r * Math.cos(ph);
+    pSpeed[i] = 0.002 + Math.random() * 0.006;
+}
+pGeo.setAttribute('position', new THREE.Float32BufferAttribute(pPos, 3));
+const particles = new THREE.Points(pGeo, new THREE.PointsMaterial({ color: 0x00bfff, size: 0.015, transparent: true, opacity: 0.5 }));
+scene.add(particles);
+
+let state = 'idle';
+let t = 0;
+window.setState = function(s) { state = s; };
+
+function animate() {
+    requestAnimationFrame(animate);
+    t += 0.016;
+
+    head.position.y = Math.sin(t * 1.2) * 0.015;
+
+    ring1.rotation.x = t * 0.2;
+    ring1.rotation.y = t * 0.15;
+    ring2.rotation.x = -t * 0.15;
+    ring2.rotation.z = t * 0.1;
+    ring3.rotation.y = t * 0.08;
+    ring3.rotation.z = -t * 0.12;
+
+    const pp = particles.geometry.attributes.position.array;
+    for (let i = 0; i < pCount; i++) {
+        pp[i*3+1] += pSpeed[i];
+        if (pp[i*3+1] > 3) { pp[i*3+1] = -3; const th = Math.random()*Math.PI*2; pp[i*3] = Math.cos(th)*(1.2+Math.random()*2); pp[i*3+2] = Math.sin(th)*(1.2+Math.random()*2); }
+    }
+    particles.geometry.attributes.position.needsUpdate = true;
+
+    const blink = Math.sin(t * 0.7) > 0.98;
+
+    if (state === 'speaking') {
+        // Mouth animation
+        mouth.scale.y = 1 + Math.abs(Math.sin(t * 14)) * 3;
+        mouth.scale.x = 1 + Math.sin(t * 10) * 0.2;
+        mouthMat.opacity = 0.7;
+        upperLip.position.y = -0.1 + Math.sin(t * 14) * 0.015;
+        lowerLip.position.y = -0.1 - Math.abs(Math.sin(t * 14)) * 0.02;
+
+        // Eye expressions
+        leftEye.iris.color.setHex(0x00ffff);
+        rightEye.iris.color.setHex(0x00ffff);
+        leftEye.glow.opacity = 0.3 + Math.sin(t * 6) * 0.15;
+        rightEye.glow.opacity = 0.3 + Math.sin(t * 6) * 0.15;
+
+        // Brows animate
+        leftBrow.mesh.position.y = 0.42 + Math.sin(t * 3) * 0.01;
+        rightBrow.mesh.position.y = 0.42 - Math.sin(t * 3) * 0.01;
+
+        light1.intensity = 1.8 + Math.sin(t * 8) * 0.4;
+        wireMat.opacity = 0.2 + Math.sin(t * 4) * 0.08;
+    } else if (state === 'thinking') {
+        mouth.scale.y = 1;
+        mouth.scale.x = 1;
+        mouthMat.opacity = 0.4;
+        upperLip.position.y = -0.1;
+        lowerLip.position.y = -0.1;
+
+        leftEye.iris.color.setHex(0x8b5cf6);
+        rightEye.iris.color.setHex(0x8b5cf6);
+        leftEye.glow.opacity = 0.25 + Math.sin(t * 2) * 0.1;
+        rightEye.glow.opacity = 0.25 + Math.sin(t * 2) * 0.1;
+
+        leftBrow.mesh.position.y = 0.44;
+        rightBrow.mesh.position.y = 0.44;
+        leftBrow.mesh.rotation.z = 0.15;
+        rightBrow.mesh.rotation.z = -0.15;
+
+        head.rotation.y = Math.sin(t * 0.6) * 0.12;
+        light1.intensity = 1.5 + Math.sin(t * 2) * 0.3;
+        wireMat.opacity = 0.15 + Math.sin(t * 1.5) * 0.05;
+    } else {
+        // Idle - subtle breathing, slow blink
+        mouth.scale.y = 1 + Math.sin(t * 0.4) * 0.08;
+        mouth.scale.x = 1;
+        mouthMat.opacity = 0.45;
+        upperLip.position.y = -0.1;
+        lowerLip.position.y = -0.1;
+
+        leftEye.iris.color.setHex(0x00bfff);
+        rightEye.iris.color.setHex(0x00bfff);
+        leftEye.glow.opacity = 0.18 + Math.sin(t * 1) * 0.08;
+        rightEye.glow.opacity = 0.18 + Math.sin(t * 1) * 0.08;
+
+        leftBrow.mesh.position.y = 0.42;
+        rightBrow.mesh.position.y = 0.42;
+        leftBrow.mesh.rotation.z = 0;
+        rightBrow.mesh.rotation.z = 0;
+
+        head.rotation.y = Math.sin(t * 0.25) * 0.04;
+        light1.intensity = 1.8;
+        wireMat.opacity = 0.15 + Math.sin(t * 0.6) * 0.03;
+
+        // Blink
+        if (blink) {
+            leftEye.glow.opacity = 0.05;
+            rightEye.glow.opacity = 0.05;
+        }
+    }
+
+    renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>

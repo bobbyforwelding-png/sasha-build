@@ -1,0 +1,7 @@
+# Treat binary files correctly to prevent line ending corruption
+*.jar binary
+*.apk binary
+*.png binary
+*.jpg binary
+*.keystore binary
+*.bin binary

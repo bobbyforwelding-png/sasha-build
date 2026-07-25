@@ -1,0 +1,1451 @@
+package com.example.presentation.ui
+
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
+import android.speech.tts.TextToSpeech
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.platform.LocalContext
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.domain.model.Job
+import com.example.domain.model.WeldSettings
+import com.example.presentation.viewmodel.VaultViewModel
+import com.example.presentation.theme.VibrantBlue
+import com.example.presentation.theme.GunmetalGray
+import com.example.presentation.viewmodel.VaultUiState
+import com.example.presentation.viewmodel.VaultChatMessage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.Locale
+
+@Composable
+fun ConsoleScreen(viewModel: VaultViewModel) {
+    val neonCyan = Color(0xFF00E5FF)
+    val darkBg = Color(0xFF0A0A0F)
+    val darkSurface = Color(0xFF111118)
+    val darkCard = Color(0xFF1A1A24)
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(viewModel.consoleLog.size) {
+        if (viewModel.consoleLog.isNotEmpty()) {
+            listState.animateScrollToItem(viewModel.consoleLog.size - 1)
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize().background(darkBg).padding(8.dp)) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.weight(1f).fillMaxWidth()
+                .background(darkSurface, RoundedCornerShape(8.dp))
+                .border(1.dp, neonCyan.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                .padding(12.dp)
+        ) {
+            items(viewModel.consoleLog) { message ->
+                val isUser = message.startsWith("USER:")
+                Text(
+                    text = message,
+                    color = if (isUser) Color(0xFF00FF66) else neonCyan,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+            if (viewModel.isLoading) {
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), color = neonCyan, strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("ALICE PROCESSING...", color = neonCyan.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = viewModel.consoleInput,
+                onValueChange = { viewModel.consoleInput = it },
+                modifier = Modifier.weight(1f),
+                label = { Text("COMMAND INPUT", color = neonCyan.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color(0xFFCCCCDD),
+                    focusedBorderColor = neonCyan,
+                    unfocusedBorderColor = Color(0xFF2A2A3A),
+                    cursorColor = neonCyan
+                ),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace, fontSize = 12.sp),
+                shape = RoundedCornerShape(8.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(
+                onClick = { viewModel.processConsoleCommand() },
+                enabled = !viewModel.isLoading,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.height(48.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = neonCyan, contentColor = Color.Black)
+            ) { Text("SEND", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 12.sp) }
+        }
+    }
+}
+
+@Composable
+fun CodexScreen(viewModel: VaultViewModel) {
+    val neonCyan = Color(0xFF00E5FF)
+    val neonPurple = Color(0xFF8B5CF6)
+    val darkBg = Color(0xFF0A0A0F)
+    val darkSurface = Color(0xFF111118)
+    val darkCard = Color(0xFF1A1A24)
+    val languages = listOf("Kotlin", "Python", "Java", "JavaScript", "Compose UI", "XML", "SQL", "Shell", "C++", "Rust", "Go")
+    var selectedLanguage by remember { mutableStateOf("Kotlin") }
+    var showLangDropdown by remember { mutableStateOf(false) }
+    var mode by remember { mutableStateOf("GENERATE") }
+    val listState = rememberLazyListState()
+
+    Column(modifier = Modifier.fillMaxSize().background(darkBg).padding(8.dp)) {
+        // Mode selector
+        Row(modifier = Modifier.fillMaxWidth().background(darkSurface, RoundedCornerShape(8.dp)).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            listOf("GENERATE" to "GENERATE", "ANALYZE" to "ANALYZE", "REWRITE" to "REWRITE").forEach { (label, m) ->
+                val active = mode == m
+                Box(
+                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(6.dp))
+                        .background(if (active) neonCyan.copy(alpha = 0.15f) else Color.Transparent)
+                        .then(if (active) Modifier.border(1.dp, neonCyan.copy(alpha = 0.5f), RoundedCornerShape(6.dp)) else Modifier)
+                        .clickable { mode = m }.padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(label, fontFamily = FontFamily.Monospace, fontWeight = if (active) FontWeight.Bold else FontWeight.Normal, fontSize = 10.sp,
+                        color = if (active) neonCyan else Color(0xFF555577))
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Language selector
+        Box {
+            OutlinedTextField(
+                value = selectedLanguage,
+                onValueChange = {},
+                readOnly = true,
+                modifier = Modifier.fillMaxWidth().clickable { showLangDropdown = true },
+                label = { Text("LANGUAGE", color = neonCyan.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
+                trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null, tint = neonCyan,
+                    modifier = Modifier.clickable { showLangDropdown = true }) },
+                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color(0xFFCCCCDD),
+                    focusedBorderColor = neonCyan, unfocusedBorderColor = Color(0xFF2A2A3A), cursorColor = neonCyan),
+                textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                shape = RoundedCornerShape(8.dp)
+            )
+            DropdownMenu(expanded = showLangDropdown, onDismissRequest = { showLangDropdown = false },
+                modifier = Modifier.background(darkSurface).border(1.dp, neonCyan.copy(alpha = 0.3f), RoundedCornerShape(8.dp))) {
+                languages.forEach { lang ->
+                    DropdownMenuItem(text = { Text(lang, fontFamily = FontFamily.Monospace, color = neonCyan, fontSize = 12.sp) }, onClick = {
+                        selectedLanguage = lang; showLangDropdown = false
+                    })
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Output area
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()
+            .background(darkSurface, RoundedCornerShape(8.dp))
+            .border(1.dp, neonCyan.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+            .padding(12.dp)) {
+            LazyColumn(state = listState) {
+                item {
+                    Text(text = viewModel.codexOutput, color = neonCyan, fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp, lineHeight = 16.sp,
+                        modifier = Modifier.fillMaxWidth())
+                }
+                if (viewModel.isLoading) {
+                    item {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                            CircularProgressIndicator(modifier = Modifier.size(14.dp), color = neonPurple, strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("CODEX PROCESSING...", color = neonPurple.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = viewModel.codexInput,
+            onValueChange = { viewModel.codexInput = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text(
+                when(mode) {
+                    "GENERATE" -> "DESCRIBE WHAT TO BUILD..."
+                    "ANALYZE" -> "PASTE CODE TO ANALYZE..."
+                    "REWRITE" -> "PASTE CODE + INSTRUCTIONS..."
+                    else -> "INPUT..."
+                }, color = neonCyan.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 11.sp
+            ) },
+            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color(0xFFCCCCDD),
+                focusedBorderColor = neonCyan, unfocusedBorderColor = Color(0xFF2A2A3A), cursorColor = neonCyan),
+            textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace, fontSize = 12.sp),
+            shape = RoundedCornerShape(8.dp)
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Button(
+            onClick = {
+                when(mode) {
+                    "GENERATE" -> viewModel.generateCodeForCodex(viewModel.codexInput, selectedLanguage)
+                    "ANALYZE" -> viewModel.executeCodeInCodex(viewModel.codexInput, selectedLanguage)
+                    "REWRITE" -> viewModel.executeCodexScript()
+                }
+            },
+            enabled = !viewModel.isLoading && viewModel.codexInput.isNotBlank(),
+            modifier = Modifier.fillMaxWidth().height(44.dp),
+            shape = RoundedCornerShape(8.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = neonCyan, contentColor = Color.Black)
+        ) {
+            Text(
+                when(mode) {
+                    "GENERATE" -> "GENERATE CODE"
+                    "ANALYZE" -> "ANALYZE CODE"
+                    "REWRITE" -> "REWRITE CODE"
+                    else -> "EXECUTE"
+                },
+                fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 12.sp
+            )
+        }
+    }
+}
+
+@Composable
+fun ProjectsScreen(viewModel: VaultViewModel) {
+    val neonCyan = Color(0xFF00E5FF)
+    val darkBg = Color(0xFF0A0A0F)
+    val darkSurface = Color(0xFF111118)
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(viewModel.projectsLog.size) {
+        if (viewModel.projectsLog.isNotEmpty()) {
+            listState.animateScrollToItem(viewModel.projectsLog.size - 1)
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize().background(darkBg).padding(8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().background(darkSurface, RoundedCornerShape(8.dp)).padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+            listOf("AUTOMOTIVE", "FABRICATION", "CODING", "PERSONAL").forEach { cat ->
+                Text(cat, color = neonCyan.copy(alpha = 0.6f), fontWeight = FontWeight.Bold, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.weight(1f).fillMaxWidth()
+                .background(darkSurface, RoundedCornerShape(8.dp))
+                .border(1.dp, neonCyan.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                .padding(12.dp)
+        ) {
+            items(viewModel.projectsLog) { message ->
+                Text(text = message, color = neonCyan, fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp, lineHeight = 16.sp,
+                    modifier = Modifier.padding(bottom = 8.dp))
+            }
+            if (viewModel.isLoading) {
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), color = neonCyan, strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("PROCESSING...", color = neonCyan.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(modifier = Modifier.fillMaxWidth()) {
+            OutlinedTextField(
+                value = viewModel.projectsInput,
+                onValueChange = { viewModel.projectsInput = it },
+                modifier = Modifier.weight(1f),
+                label = { Text("PROJECT COMMAND", color = neonCyan.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
+                colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color(0xFFCCCCDD),
+                    focusedBorderColor = neonCyan, unfocusedBorderColor = Color(0xFF2A2A3A), cursorColor = neonCyan),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace, fontSize = 12.sp),
+                shape = RoundedCornerShape(8.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(
+                onClick = { viewModel.processProjectCommand() },
+                enabled = !viewModel.isLoading,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.height(48.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = neonCyan, contentColor = Color.Black)
+            ) { Text("SEND", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 12.sp) }
+        }
+    }
+}
+
+@Composable
+fun VaultChatTerminal(viewModel: VaultViewModel, uiState: VaultUiState) {
+    val personaColor = Color(0xFF00E5FF)
+    var activeVaultTab by remember { mutableStateOf("CHAT") }
+
+    Column(modifier = Modifier.fillMaxSize().background(Color.Black).padding(16.dp)) {
+        Box(modifier = Modifier.weight(1f).border(2.dp, personaColor).padding(8.dp)) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Text("ALICE CORE ONLINE | STATUS: SECURE", color = personaColor, modifier = Modifier.padding(bottom = 8.dp), fontFamily = FontFamily.Monospace)
+
+                Box(modifier = Modifier.weight(1f)) {
+                    when (activeVaultTab) {
+                        "CHAT" -> VaultUnrestrictedChat(viewModel)
+                        "FILES" -> IntelTab(viewModel)
+                        "CODEX" -> PrivateCodexEditor(viewModel)
+                        "PROJECTS" -> ProjectsScreen(viewModel)
+                    }
+                }
+            }
+        }
+
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            VaultButton("CHAT", active = (activeVaultTab == "CHAT"), color = personaColor) { activeVaultTab = "CHAT" }
+            VaultButton("FILES", active = (activeVaultTab == "FILES"), color = personaColor) { activeVaultTab = "FILES" }
+            VaultButton("CODEX", active = (activeVaultTab == "CODEX"), color = personaColor) { activeVaultTab = "CODEX" }
+            VaultButton("PROJECTS", active = (activeVaultTab == "PROJECTS"), color = personaColor) { activeVaultTab = "PROJECTS" }
+        }
+    }
+}
+
+@Composable
+fun VaultButton(text: String, active: Boolean, color: Color, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(containerColor = if (active) color else Color.DarkGray),
+        modifier = Modifier.height(48.dp)
+    ) {
+        Text(text, fontFamily = FontFamily.Monospace, color = if (active) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+fun VaultUnrestrictedChat(viewModel: VaultViewModel) {
+    val vaultBlue = Color(0xFF00BFFF)
+    val context = LocalContext.current
+    val listState = rememberLazyListState()
+    var isSpeaking by remember { mutableStateOf(false) }
+    var mediaPlayer by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
+    val coroutineScope = rememberCoroutineScope()
+
+    val speechLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            val spokenText = data?.get(0) ?: ""
+            viewModel.unrestrictedInput = spokenText
+            viewModel.processUnrestrictedCommand()
+        }
+    }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            val inputStream = context.contentResolver.openInputStream(it)
+            val bytes = inputStream?.readBytes()
+            inputStream?.close()
+            val mime = context.contentResolver.getType(it) ?: "application/octet-stream"
+            if (mime.startsWith("image/") && bytes != null && bytes.isNotEmpty()) {
+                val resized = try {
+                    val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    if (bitmap != null) {
+                        val maxDim = 1024
+                        val scale = maxDim.toFloat() / maxOf(bitmap.width, bitmap.height).toFloat()
+                        if (scale < 1f) {
+                            val newW = (bitmap.width * scale).toInt()
+                            val newH = (bitmap.height * scale).toInt()
+                            android.graphics.Bitmap.createScaledBitmap(bitmap, newW, newH, true)
+                        } else bitmap
+                    } else null
+                } catch (_: Exception) { null }
+                if (resized != null) {
+                    val baos = java.io.ByteArrayOutputStream()
+                    resized.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, baos)
+                    val compressed = baos.toByteArray()
+                    val base64Image = android.util.Base64.encodeToString(compressed, android.util.Base64.NO_WRAP)
+                    viewModel.processUnrestrictedCommand(
+                        input = "[Photo attached — ${compressed.size / 1024}KB]\nDescribe this image in detail. What do you see?",
+                        imageBase64 = base64Image,
+                        imageMime = "image/jpeg"
+                    )
+                } else {
+                    val base64Image = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                    viewModel.processUnrestrictedCommand(
+                        input = "[Photo attached — ${bytes.size / 1024}KB]\nDescribe this image in detail. What do you see?",
+                        imageBase64 = base64Image,
+                        imageMime = mime
+                    )
+                }
+            } else if (bytes != null) {
+                val fileName = "attached_${System.currentTimeMillis()}"
+                val file = java.io.File(context.getExternalFilesDir(null), fileName)
+                file.writeBytes(bytes)
+                viewModel.unrestrictedInput = "[Attached file: ${file.name} — ${bytes.size / 1024}KB]\nTell me about this file."
+                viewModel.processUnrestrictedCommand()
+            }
+        }
+    }
+
+    LaunchedEffect(viewModel.unrestrictedLog.size) {
+        if (viewModel.unrestrictedLog.isNotEmpty()) {
+            listState.animateScrollToItem(viewModel.unrestrictedLog.size - 1)
+        }
+    }
+
+    var tts: android.speech.tts.TextToSpeech? = null
+    var ttsReady by remember { mutableStateOf(false) }
+
+    DisposableEffect(context) {
+        val engine = android.speech.tts.TextToSpeech(context) { status ->
+            if (status == android.speech.tts.TextToSpeech.SUCCESS) {
+                tts?.language = java.util.Locale.US
+                ttsReady = true
+            }
+        }
+        onDispose { engine.stop(); engine.shutdown() }
+    }
+
+    fun speakWithVoice(text: String) {
+        val cleanText = text.removePrefix("ALICE: ").trim()
+        if (cleanText.isBlank()) return
+        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            var served = false
+            try {
+                val profileId = "3338aa33-041b-4040-b2de-e2f98525104a"
+                val encoded = java.net.URLEncoder.encode(cleanText, "UTF-8")
+                val endpoints = listOf(
+                    "http://127.0.0.1:8000/tts?text=$encoded&profile_id=$profileId",
+                    "http://127.0.0.1:8000/synthesize?text=$encoded&profile_id=$profileId",
+                    "http://127.0.0.1:8000/profiles/$profileId/tts?text=$encoded",
+                    "http://127.0.0.1:8000/profiles/$profileId/synthesize?text=$encoded"
+                )
+                for (endpoint in endpoints) {
+                    try {
+                        val url = java.net.URL(endpoint)
+                        val conn = url.openConnection() as java.net.HttpURLConnection
+                        conn.connectTimeout = 3000
+                        conn.readTimeout = 10000
+                        if (conn.responseCode == 200) {
+                            val data = conn.inputStream.readBytes()
+                            conn.disconnect()
+                            val temp = java.io.File.createTempFile("sasha_v_", ".wav", context.cacheDir)
+                            java.io.FileOutputStream(temp).use { it.write(data) }
+                            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                mediaPlayer?.release()
+                                val mp = android.media.MediaPlayer()
+                                mp.setAudioAttributes(android.media.AudioAttributes.Builder()
+                                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                                mp.setDataSource(temp.absolutePath)
+                                mp.prepare()
+                                mp.start()
+                                isSpeaking = true
+                                mp.setOnCompletionListener { it.release(); temp.delete(); isSpeaking = false }
+                                mediaPlayer = mp
+                            }
+                            served = true
+                            return@launch
+                        }
+                    } catch (_: Exception) { }
+                }
+            } catch (_: Exception) { }
+            if (!served) {
+                withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    tts?.let { engine ->
+                        engine.speak(cleanText, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "sasha_utterance")
+                        isSpeaking = true
+                        engine.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+                            override fun onStart(utteranceId: String?) {}
+                            override fun onDone(utteranceId: String?) { isSpeaking = false }
+                            @Deprecated("Deprecated")
+                            override fun onError(utteranceId: String?) { isSpeaking = false }
+                        })
+                    } ?: run { isSpeaking = false }
+                }
+            }
+        }
+    }
+
+    fun togglePausePlay() {
+        val mp = mediaPlayer ?: return
+        if (mp.isPlaying) { mp.pause(); isSpeaking = false }
+        else { mp.start(); isSpeaking = true }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = { viewModel.toggleSidebar() },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(Icons.Filled.Menu, contentDescription = "Conversations", tint = Color(0xFF8B5CF6), modifier = Modifier.size(18.dp))
+                }
+                Icon(Icons.Filled.Security, contentDescription = null, tint = Color(0xFF8B5CF6))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("VAULT: UNRESTRICTED", style = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold), color = Color(0xFF8B5CF6))
+            }
+        Spacer(modifier = Modifier.height(8.dp))
+
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.weight(1f).fillMaxWidth()
+                .background(Color(0xFF111118), RoundedCornerShape(8.dp))
+                .border(1.dp, Color(0xFF8B5CF6).copy(0.3f), RoundedCornerShape(8.dp))
+                .padding(12.dp)
+        ) {
+            items(viewModel.unrestrictedLog) { message ->
+                val isUser = message.text.startsWith("USER:")
+                Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = message.text,
+                            color = if (isUser) Color(0xFF00FF66) else Color(0xFF00E5FF),
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (message.text.startsWith("ALICE:")) {
+                            IconButton(
+                                onClick = {
+                                    if (isSpeaking) togglePausePlay() else speakWithVoice(message.text)
+                                },
+                                modifier = Modifier.padding(start = 8.dp).size(32.dp)
+                            ) {
+                                Icon(
+                                    if (isSpeaking) Icons.Filled.Pause else Icons.Filled.VolumeUp,
+                                    contentDescription = if (isSpeaking) "Pause" else "Listen",
+                                    tint = Color(0xFF00E5FF), modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                    }
+                    if (message.imageBase64 != null && message.imageMime != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        val bitmap = remember(message.imageBase64) {
+                            try {
+                                val bytes = android.util.Base64.decode(message.imageBase64, android.util.Base64.DEFAULT)
+                                android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                            } catch (_: Exception) { null }
+                        }
+                        if (bitmap != null) {
+                            androidx.compose.foundation.Image(
+                                bitmap = bitmap.asImageBitmap(),
+                                contentDescription = "Generated image",
+                                modifier = Modifier.fillMaxWidth().heightIn(max = 250.dp).clip(RoundedCornerShape(8.dp)).border(1.dp, Color(0xFF00E5FF).copy(0.4f), RoundedCornerShape(8.dp))
+                            )
+                        }
+                    }
+                }
+            }
+            if (viewModel.isLoading) {
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), color = Color(0xFF8B5CF6), strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("ALICE PROCESSING...", color = Color(0xFF8B5CF6).copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(
+                onClick = { photoPickerLauncher.launch("*/*") },
+                modifier = Modifier.padding(end = 4.dp).background(Color(0xFF1A1A24), RoundedCornerShape(8.dp)).border(1.dp, Color(0xFF00E5FF).copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = "Attach", tint = Color(0xFF00E5FF))
+            }
+
+            IconButton(
+                onClick = {
+                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                        putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak your command...")
+                    }
+                    speechLauncher.launch(intent)
+                },
+                modifier = Modifier.padding(end = 4.dp).background(Color(0xFF8B5CF6), RoundedCornerShape(8.dp))
+            ) {
+                Icon(Icons.Filled.Mic, contentDescription = "Speak", tint = Color.White)
+            }
+
+            OutlinedTextField(
+                value = viewModel.unrestrictedInput,
+                onValueChange = { viewModel.unrestrictedInput = it },
+                modifier = Modifier.weight(1f),
+                label = { Text("SECURE COMMAND", color = Color(0xFF00E5FF).copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color(0xFFCCCCDD),
+                    focusedBorderColor = Color(0xFF00E5FF),
+                    unfocusedBorderColor = Color(0xFF2A2A3A),
+                    cursorColor = Color(0xFF00E5FF)
+                ),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace, fontSize = 12.sp),
+                shape = RoundedCornerShape(8.dp)
+            )
+
+            IconButton(
+                onClick = {
+                    val lastResponse = viewModel.unrestrictedLog.lastOrNull()?.text?.replace("ALICE:", "") ?: ""
+                    if (isSpeaking) togglePausePlay() else speakWithVoice(lastResponse)
+                },
+                modifier = Modifier.padding(start = 4.dp).background(Color(0xFF1A1A24), RoundedCornerShape(8.dp)).border(1.dp, Color(0xFF00E5FF).copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+            ) {
+                Icon(
+                    if (isSpeaking) Icons.Filled.Pause else Icons.Filled.VolumeUp,
+                    contentDescription = if (isSpeaking) "Pause" else "Read Aloud",
+                    tint = Color(0xFF00E5FF)
+                )
+            }
+
+            Button(
+                onClick = { viewModel.processUnrestrictedCommand() },
+                enabled = !viewModel.isLoading,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.padding(start = 4.dp).height(44.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF), contentColor = Color.Black)
+            ) { Text("EXECUTE", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 11.sp) }
+        }
+    }
+
+    ConversationSidebar(
+        isOpen = viewModel.showSidebar,
+        manager = viewModel.conversationManager,
+        currentConvoId = viewModel.currentConversation?.id,
+        onSelect = { viewModel.selectConversation(it) },
+        onNew = { viewModel.newConversation() },
+        onClose = { viewModel.showSidebar = false }
+    )
+    }
+}
+
+@Composable
+fun PrivateCodexEditor(viewModel: VaultViewModel) {
+    val neonBlue = Color(0xFF00E5FF)
+    val languages = listOf("Kotlin", "Python", "Java", "JavaScript", "Compose UI", "XML", "Shell", "SQL")
+    var selectedLanguage by remember { mutableStateOf("Kotlin") }
+    var showLangDropdown by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+
+    Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box {
+                OutlinedTextField(
+                    value = selectedLanguage,
+                    onValueChange = {},
+                    readOnly = true,
+                    modifier = Modifier.clickable { showLangDropdown = true }.width(140.dp),
+                    label = { Text("LANG", color = Color.Red, fontFamily = FontFamily.Monospace, fontSize = 10.sp) },
+                    trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null, tint = Color.Red) },
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color.Red.copy(0.5f), unfocusedBorderColor = Color.DarkGray),
+                    textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace)
+                )
+                DropdownMenu(expanded = showLangDropdown, onDismissRequest = { showLangDropdown = false }) {
+                    languages.forEach { lang ->
+                        DropdownMenuItem(text = { Text(lang, fontFamily = FontFamily.Monospace) }, onClick = {
+                            selectedLanguage = lang; showLangDropdown = false
+                        })
+                    }
+                }
+            }
+        }
+
+        Box(modifier = Modifier.weight(1f).fillMaxWidth().border(1.dp, Color.Red).padding(8.dp)) {
+            LazyColumn(state = listState) {
+                item {
+                    Text(text = viewModel.codexOutput, color = Color.Red, fontFamily = FontFamily.Monospace)
+                }
+                if (viewModel.isLoading) {
+                    item {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.Red, strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Processing...", color = Color.Red.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        OutlinedTextField(
+            value = viewModel.codexInput,
+            onValueChange = { viewModel.codexInput = it },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            placeholder = { Text("Enter code or describe what to build...", color = Color.Red.copy(alpha = 0.4f), fontFamily = FontFamily.Monospace) },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = Color.Red,
+                unfocusedTextColor = Color.Red,
+                focusedBorderColor = Color.Red.copy(alpha = 0.5f),
+                unfocusedBorderColor = Color.DarkGray
+            ),
+            textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace)
+        )
+
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = { viewModel.generateCodeForCodex(viewModel.codexInput, selectedLanguage) },
+                enabled = !viewModel.isLoading && viewModel.codexInput.isNotBlank(),
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+            ) {
+                Text("GENERATE", fontFamily = FontFamily.Monospace, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+            }
+            Button(
+                onClick = { viewModel.executeCodeInCodex(viewModel.codexInput, selectedLanguage) },
+                enabled = !viewModel.isLoading && viewModel.codexInput.isNotBlank(),
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(0.5f))
+            ) {
+                Text("ANALYZE", fontFamily = FontFamily.Monospace, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+            }
+        }
+    }
+}
+
+// WELD SETTINGS LOOKUP
+fun getWeldSettings(metal: String, thick: String, process: String): WeldSettings {
+    val isThin = thick.contains("16")
+    val isMed = thick.contains("1/8") || thick.contains("3/16")
+    return when (metal) {
+        "Steel" -> when (process) {
+            "MIG" -> if (isThin) WeldSettings("90-100 A", "17.5 V", "240 IPM", "75/25 Ar/CO2", "0.030\" ER70S-6", "DCEP", "Thin sheet steel. Keep travel fast to avoid burn.")
+                     else if (isMed) WeldSettings("130-150 A", "19.5 V", "340 IPM", "75/25 Ar/CO2", "0.035\" ER70S-6", "DCEP", "Standard short-circuit. Maintain 1/2\" wire stickout.")
+                     else WeldSettings("185-210 A", "23.5 V", "450 IPM", "75/25 Ar/CO2", "0.045\" ER70S-6", "DCEP", "Heavy bevel joint. Runs hot. Multi-pass recommended.")
+            "TIG" -> if (isThin) WeldSettings("55-70 A", "11.0 V", "N/A", "100% Argon", "1/16\" Tungsten", "DCEN", "Maintain tight arc, low heat. ER70S-6 rod.")
+                     else if (isMed) WeldSettings("115-135 A", "12.0 V", "N/A", "100% Argon", "3/32\" Tungsten", "DCEN", "Use 3/32\" filler wire. Golden straw coloring is perfect.")
+                     else WeldSettings("180-220 A", "14.5 V", "N/A", "100% Argon", "1/8\" Tungsten", "DCEN", "Heavy sections. Water-cooled torch advised.")
+            else -> if (isThin) WeldSettings("45-55 A", "20.0 V", "N/A", "None", "3/32\" E6013", "DCEP", "Stick is hard on thin sheet. Clean slag frequently.")
+                    else if (isMed) WeldSettings("85-110 A", "23.0 V", "N/A", "None", "1/8\" E7018", "DCEP", "Standard structural stick. Keep rod feeding steadily.")
+                    else WeldSettings("130-160 A", "25.0 V", "N/A", "None", "5/32\" E7018", "DCEP", "Heavy steel plates. Run multi-pass beads.")
+        }
+        "Aluminum" -> when (process) {
+            "MIG" -> if (isThin) WeldSettings("80-95 A", "16.0 V", "380 IPM", "100% Argon", "0.030\" ER4043", "DCEP", "Spool gun mandatory. High travel speed required.")
+                     else if (isMed) WeldSettings("135-155 A", "19.0 V", "460 IPM", "100% Argon", "0.035\" ER4043", "DCEP", "Clean oxides off completely with stainless steel brush.")
+                     else WeldSettings("190-225 A", "21.5 V", "520 IPM", "100% Argon", "3/64\" ER5356", "DCEP", "Heavier gun needed. Preheat thick sections to 250F.")
+            "TIG" -> if (isThin) WeldSettings("60-80 A", "14.0 V", "N/A", "100% Argon", "3/32\" Tungsten", "AC", "AC TIG. Balance 70% penetration / 30% cleaning.")
+                     else if (isMed) WeldSettings("120-145 A", "15.5 V", "N/A", "100% Argon", "3/32\" Tungsten", "AC", "Wipe down aluminum with pure acetone before welding.")
+                     else WeldSettings("190-230 A", "17.0 V", "N/A", "100% Argon", "1/8\" Tungsten", "AC", "AC TIG. Heavy foot pedal heat needed to start bead.")
+            else -> WeldSettings("75-120 A", "24.0 V", "N/A", "None", "1/8\" Alum 43", "DCEP", "Rare but fast. Maintain extremely close arc.")
+        }
+        else -> when (process) {
+            "MIG" -> if (isThin) WeldSettings("70-85 A", "16.5 V", "220 IPM", "98/2 Ar/O2", "0.030\" ER308L", "DCEP", "Keep heat down to prevent chromium burnout.")
+                     else if (isMed) WeldSettings("100-125 A", "18.5 V", "300 IPM", "Trimix Gas", "0.035\" ER308L", "DCEP", "Trimix gas (He/Ar/CO2) provides standard wetting.")
+                     else WeldSettings("150-180 A", "21.5 V", "360 IPM", "Trimix Gas", "0.035\" ER308L", "DCEP", "Multiple smaller stringer passes are best.")
+            "TIG" -> if (isThin) WeldSettings("45-60 A", "10.5 V", "N/A", "100% Argon", "1/16\" Tungsten", "DCEN", "Back-purge interior of pipe/tube with argon gas.")
+                     else if (isMed) WeldSettings("85-110 A", "11.5 V", "N/A", "100% Argon", "3/32\" Tungsten", "DCEN", "Lanthanated tungsten. Golden-rainbow color is perfect.")
+                     else WeldSettings("140-175 A", "13.5 V", "N/A", "100% Argon", "3/32\" Tungsten", "DCEN", "Avoid weaving; run straight stringer beads.")
+            else -> WeldSettings("70-100 A", "22.0 V", "N/A", "None", "1/8\" E308L-16", "DCEP", "Specialized stainless rods. Slag pops when cooling!")
+        }
+    }
+}
+
+@Composable
+fun WatermarkBackground() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Icon(
+            imageVector = Icons.Filled.Build,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.03f),
+            modifier = Modifier.size(240.dp)
+        )
+    }
+}
+
+@Composable
+fun VaultScreen(viewModel: VaultViewModel = hiltViewModel()) {
+    val uiState by viewModel.uiState.collectAsState()
+
+    Box(modifier = Modifier.fillMaxSize().background(GunmetalGray)) {
+        WatermarkBackground()
+
+        if (uiState.savedPin == null) {
+            SetupPinUI(onPinCreated = { pin -> viewModel.setupPin(pin) })
+        } else if (!uiState.isUnlocked) {
+            PINEntryGate(viewModel, uiState.loginError)
+        } else {
+            MainVaultDashboard(viewModel, uiState)
+        }
+    }
+}
+
+@Composable
+fun MainVaultDashboard(viewModel: VaultViewModel, uiState: VaultUiState) {
+    var activePage by remember { mutableStateOf("CONSOLE") }
+    var showSettings by remember { mutableStateOf(false) }
+    val neonCyan = Color(0xFF00E5FF)
+    val neonPurple = Color(0xFF8B5CF6)
+    val darkBg = Color(0xFF0A0A0F)
+    val darkSurface = Color(0xFF111118)
+    val darkCard = Color(0xFF1A1A24)
+
+    Box(modifier = Modifier.fillMaxSize().background(darkBg)) {
+        Column(modifier = Modifier.fillMaxSize().padding(8.dp).windowInsetsPadding(WindowInsets.safeDrawing)) {
+            // 3D Avatar with glow border
+            Box(
+                modifier = Modifier.fillMaxWidth().height(180.dp)
+                    .border(1.dp, neonCyan.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                    .background(darkSurface, RoundedCornerShape(12.dp))
+                    .padding(4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                SashaAvatar3D(
+                    isSpeaking = false,
+                    isThinking = viewModel.isLoading,
+                    avatarUrl = viewModel.avatarUrl,
+                    modifier = Modifier.fillMaxSize(),
+                    primaryColor = neonCyan,
+                    onAvatarUrlChange = { viewModel.saveAvatarUrl(it) }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Status bar
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(modifier = Modifier.size(6.dp).background(neonCyan, RoundedCornerShape(50)))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    if (viewModel.isLoading) "ALICE PROCESSING..." else "ALICE ONLINE",
+                    color = if (viewModel.isLoading) Color(0xFFFBBF24) else neonCyan,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    "ALICE TRADING SYSTEM",
+                    color = Color(0xFF555577),
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 9.sp
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(onClick = { showSettings = true }, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = neonCyan, modifier = Modifier.size(16.dp))
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Tab bar with glow indicator
+            Row(
+                modifier = Modifier.fillMaxWidth().background(darkSurface, RoundedCornerShape(10.dp)).padding(4.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                CyberTab("CONSOLE", activePage == "CONSOLE", neonCyan) { activePage = "CONSOLE" }
+                CyberTab("CODEX", activePage == "CODEX", neonCyan) { activePage = "CODEX" }
+                CyberTab("PROJECTS", activePage == "PROJECTS", neonCyan) { activePage = "PROJECTS" }
+                CyberTab("VAULT", activePage == "VAULT", neonCyan) { activePage = "VAULT" }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Content area
+            Box(
+                modifier = Modifier.weight(1f)
+                    .border(1.dp, neonCyan.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                    .background(darkCard, RoundedCornerShape(12.dp))
+                    .padding(4.dp)
+            ) {
+                when (activePage) {
+                    "CONSOLE" -> ConsoleScreen(viewModel)
+                    "CODEX" -> CodexScreen(viewModel)
+                    "PROJECTS" -> ProjectsScreen(viewModel)
+                    "VAULT" -> VaultTerminalScreen(viewModel)
+                }
+            }
+        }
+    }
+
+    if (showSettings) {
+        SettingsScreen(onClose = { showSettings = false })
+    }
+}
+
+@Composable
+fun CyberTab(text: String, active: Boolean, color: Color, onClick: () -> Unit) {
+    val darkSurface = Color(0xFF111118)
+    val darkCard = Color(0xFF1A1A24)
+
+    Button(
+        onClick = onClick,
+        shape = RoundedCornerShape(8.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (active) color.copy(alpha = 0.15f) else Color.Transparent,
+            contentColor = if (active) color else Color(0xFF555577)
+        ),
+        border = if (active) androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.5f)) else null,
+        modifier = Modifier.padding(horizontal = 2.dp).height(36.dp)
+    ) {
+        Text(
+            text,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+            fontSize = 10.sp
+        )
+    }
+}
+
+@Composable
+fun VaultTerminalScreen(viewModel: VaultViewModel) {
+    val neonCyan = Color(0xFF00E5FF)
+    val darkBg = Color(0xFF0A0A0F)
+    val context = LocalContext.current
+
+    if (!viewModel.isPage4Unlocked) {
+        Column(
+            modifier = Modifier.fillMaxSize().background(darkBg).padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                "RESTRICTED ACCESS",
+                color = Color(0xFFFF4444),
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 16.sp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "VAULT SECURITY PROTOCOL",
+                color = Color(0xFF555577),
+                fontFamily = FontFamily.Monospace,
+                fontSize = 10.sp
+            )
+            OutlinedTextField(
+                value = viewModel.unlockPin,
+                onValueChange = { viewModel.unlockPin = it },
+                label = { Text("ENTER OVERRIDE PIN", color = neonCyan, fontFamily = FontFamily.Monospace) },
+                modifier = Modifier.padding(top = 16.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedBorderColor = neonCyan,
+                    unfocusedBorderColor = Color(0xFF2A2A3A)
+                ),
+                textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace)
+            )
+            Button(
+                onClick = { viewModel.verifyPin() },
+                modifier = Modifier.padding(top = 8.dp),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = neonCyan, contentColor = Color.Black)
+            ) {
+                Text("UNLOCK", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+            }
+        }
+    } else {
+        VaultUnrestrictedChat(viewModel)
+    }
+}
+
+@Composable
+fun PINEntryGate(viewModel: VaultViewModel, loginError: Boolean) {
+    var passcodeInput by remember { mutableStateOf("") }
+    Column(
+        modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(24.dp).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(Icons.Filled.Lock, contentDescription = "Locked", tint = VibrantBlue, modifier = Modifier.size(64.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("ALICE SYSTEM ACCESS", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace), color = VibrantBlue)
+        Text("RESTRICTED TERMINAL", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = VibrantBlue.copy(alpha = 0.5f))
+        Spacer(modifier = Modifier.height(32.dp))
+        OutlinedTextField(
+            value = passcodeInput, onValueChange = { passcodeInput = it; viewModel.resetError() },
+            label = { Text("Enter Passcode Override", fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
+            visualTransformation = PasswordVisualTransformation(), isError = loginError, singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+            textStyle = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace, color = Color.White, textAlign = TextAlign.Center),
+            modifier = Modifier.fillMaxWidth(0.85f),
+            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White, focusedBorderColor = VibrantBlue, unfocusedBorderColor = Color.White.copy(0.15f), errorBorderColor = Color(0xFFFF4D4D), focusedLabelColor = VibrantBlue)
+        )
+        if (loginError) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("AUTHORIZATION EXPIRED/INVALID", color = Color(0xFFFF4D4D), style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace))
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(onClick = { viewModel.unlock(passcodeInput) }, colors = ButtonDefaults.buttonColors(containerColor = VibrantBlue, contentColor = Color.White), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth(0.85f).height(48.dp)) {
+            Text("AUTHORIZE SYSTEM ACCESS", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace))
+        }
+        Spacer(modifier = Modifier.height(48.dp))
+        TextButton(onClick = { viewModel.forceReset(); passcodeInput = "" }) {
+            Text("FORCE ENCRYPTION RESET OVERRIDE", color = Color(0xFFFF4D4D).copy(alpha = 0.35f), style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun JobsTab(jobs: List<Job>, onJobsChanged: (List<Job>) -> Unit) {
+    var showDialog by remember { mutableStateOf(false) }
+    var filter by remember { mutableStateOf("ALL") }
+    var name by remember { mutableStateOf("") }
+    var customer by remember { mutableStateOf("") }
+    var metal by remember { mutableStateOf("Steel") }
+    var process by remember { mutableStateOf("MIG") }
+    var price by remember { mutableStateOf("") }
+    var notes by remember { mutableStateOf("") }
+
+    val filtered = remember(jobs, filter) {
+        when (filter) {
+            "ACTIVE" -> jobs.filter { it.status != "Completed" }
+            "DONE" -> jobs.filter { it.status == "Completed" }
+            else -> jobs
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf("ALL" to "All Jobs", "ACTIVE" to "Active Run", "DONE" to "Completed").forEach { (v, l) ->
+                val sel = filter == v
+                Box(modifier = Modifier.clip(RoundedCornerShape(4.dp)).border(1.dp, if (sel) VibrantBlue else Color.White.copy(0.12f), RoundedCornerShape(4.dp)).background(if (sel) VibrantBlue.copy(0.12f) else Color.Black.copy(0.2f)).clickable { filter = v }.padding(horizontal = 12.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
+                    Text(l, style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold), color = if (sel) VibrantBlue else Color.White.copy(0.6f))
+                }
+            }
+        }
+
+        if (filtered.isEmpty()) {
+            Box(modifier = Modifier.weight(1f).fillMaxWidth().border(1.dp, Color.White.copy(0.05f), RoundedCornerShape(8.dp)).background(Color.Black.copy(0.1f)).padding(24.dp), contentAlignment = Alignment.Center) {
+                Text("NO RECORDED WORK JOBS", style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace, color = Color.White.copy(0.35f)))
+            }
+        } else {
+            LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(filtered, key = { it.id }) { job ->
+                    JobCard(job = job, onStatus = { st ->
+                        val list = jobs.toMutableList()
+                        val idx = list.indexOfFirst { it.id == job.id }
+                        if (idx != -1) { list[idx] = job.copy(status = st); onJobsChanged(list) }
+                    }, onDelete = { onJobsChanged(jobs.filter { it.id != job.id }) })
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+        Button(onClick = { name = ""; customer = ""; metal = "Steel"; process = "MIG"; price = ""; notes = ""; showDialog = true }, modifier = Modifier.fillMaxWidth().height(48.dp), colors = ButtonDefaults.buttonColors(containerColor = VibrantBlue, contentColor = Color.White), shape = RoundedCornerShape(6.dp)) {
+            Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp)); Spacer(modifier = Modifier.width(6.dp))
+            Text("CREATE SHOP WORK ORDER", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace))
+        }
+    }
+
+    if (showDialog) {
+        Dialog(onDismissRequest = { showDialog = false }) {
+            Card(modifier = Modifier.fillMaxWidth().border(1.dp, VibrantBlue, RoundedCornerShape(10.dp)), colors = CardDefaults.cardColors(containerColor = GunmetalGray), shape = RoundedCornerShape(10.dp)) {
+                Column(modifier = Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("INITIALIZE JOB LOG", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace), color = VibrantBlue)
+                        IconButton(onClick = { showDialog = false }) { Icon(Icons.Filled.Close, contentDescription = null, tint = Color.White) }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Job Description", color = Color.White.copy(0.5f)) }, singleLine = true, textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace), modifier = Modifier.fillMaxWidth(), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = VibrantBlue, unfocusedBorderColor = Color.White.copy(0.12f)))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(value = customer, onValueChange = { customer = it }, label = { Text("Client / Customer", color = Color.White.copy(0.5f)) }, singleLine = true, textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace), modifier = Modifier.fillMaxWidth(), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = VibrantBlue, unfocusedBorderColor = Color.White.copy(0.12f)))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("METAL:", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = Color.White.copy(0.4f))
+                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("Steel", "Aluminum", "Stainless").forEach { m ->
+                            val s = metal == m
+                            Box(modifier = Modifier.weight(1f).clip(RoundedCornerShape(4.dp)).background(if (s) VibrantBlue else Color.Black.copy(0.2f)).clickable { metal = m }.padding(vertical = 6.dp), contentAlignment = Alignment.Center) {
+                                Text(m.uppercase(), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace), color = Color.White)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("PROCESS:", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = Color.White.copy(0.4f))
+                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("MIG", "TIG", "Stick").forEach { p ->
+                            val s = process == p
+                            Box(modifier = Modifier.weight(1f).clip(RoundedCornerShape(4.dp)).background(if (s) VibrantBlue else Color.Black.copy(0.2f)).clickable { process = p }.padding(vertical = 6.dp), contentAlignment = Alignment.Center) {
+                                Text(p, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace), color = Color.White)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(value = price, onValueChange = { price = it }, label = { Text("Quote Price ($)", color = Color.White.copy(0.5f)) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace), modifier = Modifier.fillMaxWidth(), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = VibrantBlue, unfocusedBorderColor = Color.White.copy(0.12f)))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text("Dimensions / Notes", color = Color.White.copy(0.5f)) }, textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace), modifier = Modifier.fillMaxWidth().height(80.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = VibrantBlue, unfocusedBorderColor = Color.White.copy(0.12f)))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(onClick = {
+                        if (name.isNotBlank() && customer.isNotBlank()) {
+                            onJobsChanged(jobs + Job(name = name, customer = customer, metalType = metal, process = process, status = "In Queue", price = if (price.isBlank()) "0" else price, notes = notes)); showDialog = false
+                        }
+                    }, modifier = Modifier.fillMaxWidth().height(46.dp), colors = ButtonDefaults.buttonColors(containerColor = VibrantBlue, contentColor = Color.White), shape = RoundedCornerShape(6.dp)) {
+                        Text("SUBMIT JOB", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun JobCard(job: Job, onStatus: (String) -> Unit, onDelete: () -> Unit) {
+    val statusColor = when (job.status) {
+        "Completed" -> Color(0xFF00FF66) to Color(0xFF00FF66).copy(0.12f)
+        "Welding" -> VibrantBlue to VibrantBlue.copy(0.12f)
+        "Prepping" -> Color(0xFF00E5FF) to Color(0xFF00E5FF).copy(0.12f)
+        else -> Color(0xFFA0A0AB) to Color(0xFFA0A0AB).copy(0.12f)
+    }
+    Card(modifier = Modifier.fillMaxWidth().border(1.dp, Color.White.copy(0.06f), RoundedCornerShape(6.dp)), colors = CardDefaults.cardColors(containerColor = Color.Black.copy(0.2f)), shape = RoundedCornerShape(6.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(job.name.uppercase(), style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("CLIENT: ${job.customer}", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = Color.White.copy(0.45f))
+                }
+                Text("$${job.price}", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace), color = VibrantBlue)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.clip(RoundedCornerShape(3.dp)).background(Color.White.copy(0.05f)).padding(horizontal = 6.dp, vertical = 3.dp)) { Text(job.metalType.uppercase(), style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontFamily = FontFamily.Monospace), color = Color.White.copy(0.6f)) }
+                Box(modifier = Modifier.clip(RoundedCornerShape(3.dp)).background(Color.White.copy(0.05f)).padding(horizontal = 6.dp, vertical = 3.dp)) { Text(job.process, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontFamily = FontFamily.Monospace), color = Color.White.copy(0.6f)) }
+                Spacer(modifier = Modifier.weight(1f))
+                Box(modifier = Modifier.clip(RoundedCornerShape(3.dp)).background(statusColor.second).padding(horizontal = 6.dp, vertical = 3.dp)) { Text(job.status.uppercase(), style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold), color = statusColor.first) }
+            }
+            if (job.notes.isNotBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(job.notes, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 10.sp), color = Color.White.copy(0.5f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            HorizontalDivider(color = Color.White.copy(0.04f))
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("Prepping" to "Prep", "Welding" to "Weld", "Completed" to "Done").forEach { (v, l) ->
+                        val act = job.status == v
+                        Box(modifier = Modifier.clip(RoundedCornerShape(3.dp)).border(1.dp, if (act) VibrantBlue else Color.White.copy(0.06f), RoundedCornerShape(3.dp)).clickable { onStatus(v) }.padding(horizontal = 8.dp, vertical = 4.dp)) { Text(l, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontFamily = FontFamily.Monospace), color = if (act) VibrantBlue else Color.White.copy(0.4f)) }
+                    }
+                }
+                IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) { Icon(Icons.Filled.Delete, contentDescription = null, tint = Color(0xFFFF4D4D).copy(0.5f), modifier = Modifier.size(14.dp)) }
+            }
+        }
+    }
+}
+
+@Composable
+fun WeldCalculatorTab() {
+    var metal by remember { mutableStateOf("Steel") }
+    var thick by remember { mutableStateOf("1/8\"") }
+    var proc by remember { mutableStateOf("MIG") }
+    var shape by remember { mutableStateOf("PLATE") }
+    var pL by remember { mutableStateOf("") }
+    var pW by remember { mutableStateOf("") }
+    var pT by remember { mutableStateOf("") }
+    var rD by remember { mutableStateOf("") }
+    var rL by remember { mutableStateOf("") }
+    var tW by remember { mutableStateOf("") }
+    var tWall by remember { mutableStateOf("") }
+    var tL by remember { mutableStateOf("") }
+
+    val settings = remember(metal, thick, proc) { getWeldSettings(metal, thick, proc) }
+
+    val weight = remember(shape, metal, pL, pW, pT, rD, rL, tW, tWall, tL) {
+        try {
+            val d = when (metal) { "Aluminum" -> 0.0975; "Stainless" -> 0.290; else -> 0.2833 }
+            when (shape) {
+                "PLATE" -> { val l = pL.toDoubleOrNull() ?: 0.0; val w = pW.toDoubleOrNull() ?: 0.0; val t = pT.toDoubleOrNull() ?: 0.0; if (l * w * t > 0) String.format("%.2f LBS", l * w * t * d) else "--- LBS" }
+                "ROUND_BAR" -> { val diam = rD.toDoubleOrNull() ?: 0.0; val l = rL.toDoubleOrNull() ?: 0.0; if (diam * l > 0) String.format("%.2f LBS", Math.PI * (diam / 2) * (diam / 2) * l * d) else "--- LBS" }
+                else -> { val w = tW.toDoubleOrNull() ?: 0.0; val wall = tWall.toDoubleOrNull() ?: 0.0; val l = tL.toDoubleOrNull() ?: 0.0; if (w > 0 && wall > 0 && l > 0 && wall * 2 < w) String.format("%.2f LBS", ((w * w) - ((w - 2 * wall) * (w - 2 * wall))) * l * d) else "--- LBS" }
+            }
+        } catch (e: Exception) { "--- LBS" }
+    }
+
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Card(modifier = Modifier.fillMaxWidth().border(1.dp, Color.White.copy(0.06f), RoundedCornerShape(6.dp)), colors = CardDefaults.cardColors(containerColor = Color.Black.copy(0.2f)), shape = RoundedCornerShape(6.dp)) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text("WELD SPEC INPUTS", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold), color = VibrantBlue)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("METAL", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontFamily = FontFamily.Monospace), color = Color.White.copy(0.4f))
+                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("Steel", "Aluminum", "Stainless").forEach { m ->
+                        val s = metal == m; Box(modifier = Modifier.weight(1f).clip(RoundedCornerShape(4.dp)).background(if (s) VibrantBlue else Color.Black.copy(0.2f)).clickable { metal = m }.padding(vertical = 6.dp), contentAlignment = Alignment.Center) { Text(m.uppercase(), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace), color = Color.White) }
+                    }
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text("THICKNESS", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontFamily = FontFamily.Monospace), color = Color.White.copy(0.4f))
+                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("16 GA", "1/8\"", "3/16\"", "1/4\"", "3/8\"", "1/2\"").forEach { t ->
+                        val s = thick == t; Box(modifier = Modifier.weight(1f).clip(RoundedCornerShape(4.dp)).background(if (s) VibrantBlue else Color.Black.copy(0.2f)).clickable { thick = t }.padding(vertical = 6.dp), contentAlignment = Alignment.Center) { Text(t, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace), color = Color.White) }
+                    }
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text("PROCESS", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontFamily = FontFamily.Monospace), color = Color.White.copy(0.4f))
+                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("MIG", "TIG", "Stick").forEach { p ->
+                        val s = proc == p; Box(modifier = Modifier.weight(1f).clip(RoundedCornerShape(4.dp)).background(if (s) VibrantBlue else Color.Black.copy(0.2f)).clickable { proc = p }.padding(vertical = 6.dp), contentAlignment = Alignment.Center) { Text(p, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace), color = Color.White) }
+                    }
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        Card(modifier = Modifier.fillMaxWidth().border(1.dp, VibrantBlue.copy(0.25f), RoundedCornerShape(6.dp)), colors = CardDefaults.cardColors(containerColor = GunmetalGray), shape = RoundedCornerShape(6.dp)) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Text("CALCULATED SETTINGS", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold), color = Color(0xFF00FF66))
+                Spacer(modifier = Modifier.height(10.dp))
+                listOf("AMPERAGE" to settings.amp, "VOLTAGE" to settings.volt, "W.F. SPEED" to settings.wire, "SHIELD GAS" to settings.gas, "ELECTRODE" to settings.rod, "POLARITY" to settings.pol).forEach { (l, v) ->
+                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(l, style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = Color.White.copy(0.45f))
+                        Text(v, style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold), color = Color.White)
+                    }
+                    HorizontalDivider(color = Color.White.copy(0.04f))
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)).background(Color(0xFF00FF66).copy(0.05f)).padding(8.dp)) {
+                    Text(settings.tip, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp), color = Color(0xFF00FF66))
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Card(modifier = Modifier.fillMaxWidth().border(1.dp, Color.White.copy(0.06f), RoundedCornerShape(6.dp)), colors = CardDefaults.cardColors(containerColor = Color.Black.copy(0.2f)), shape = RoundedCornerShape(6.dp)) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text("WEIGHT ESTIMATOR", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold), color = VibrantBlue)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    listOf("PLATE" to "Plate", "ROUND_BAR" to "Round", "SQUARE_TUBE" to "Tube").forEach { (sh, lb) ->
+                        val s = shape == sh; Box(modifier = Modifier.weight(1f).clip(RoundedCornerShape(4.dp)).background(if (s) VibrantBlue else Color.Black.copy(0.2f)).clickable { shape = sh }.padding(vertical = 6.dp), contentAlignment = Alignment.Center) { Text(lb, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace), color = Color.White) }
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (shape == "PLATE") {
+                        OutlinedTextField(value = pL, onValueChange = { pL = it }, label = { Text("Len", fontSize = 9.sp) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = VibrantBlue))
+                        OutlinedTextField(value = pW, onValueChange = { pW = it }, label = { Text("Wid", fontSize = 9.sp) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = VibrantBlue))
+                        OutlinedTextField(value = pT, onValueChange = { pT = it }, label = { Text("Thk", fontSize = 9.sp) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = VibrantBlue))
+                    } else if (shape == "ROUND_BAR") {
+                        OutlinedTextField(value = rD, onValueChange = { rD = it }, label = { Text("Dia", fontSize = 9.sp) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = VibrantBlue))
+                        OutlinedTextField(value = rL, onValueChange = { rL = it }, label = { Text("Len", fontSize = 9.sp) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = VibrantBlue))
+                    } else {
+                        OutlinedTextField(value = tW, onValueChange = { tW = it }, label = { Text("Width", fontSize = 9.sp) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = VibrantBlue))
+                        OutlinedTextField(value = tWall, onValueChange = { tWall = it }, label = { Text("Wall", fontSize = 9.sp) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = VibrantBlue))
+                        OutlinedTextField(value = tL, onValueChange = { tL = it }, label = { Text("Len", fontSize = 9.sp) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = VibrantBlue))
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)).background(Color.White.copy(0.04f)).padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("WEIGHT (${metal.uppercase()}):", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = Color.White.copy(0.4f))
+                    Text(weight, style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold), color = VibrantBlue)
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+@Composable
+fun SafetyTab(ppe: Boolean, onPpe: (Boolean) -> Unit, vent: Boolean, onVent: (Boolean) -> Unit, ground: Boolean, onGround: (Boolean) -> Unit, gas: Boolean, onGas: (Boolean) -> Unit, fire: Boolean, onFire: (Boolean) -> Unit, runCode: String?, onRunCode: (String?) -> Unit) {
+    val count = listOf(ppe, vent, ground, gas, fire).count { it }
+    val prog = count / 5f
+    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Card(modifier = Modifier.fillMaxWidth().border(1.dp, Color.White.copy(0.06f), RoundedCornerShape(6.dp)), colors = CardDefaults.cardColors(containerColor = Color.Black.copy(0.2f)), shape = RoundedCornerShape(6.dp)) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text("DAILY SAFETY LOCKS", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold), color = VibrantBlue)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("Complete checklist before drawing run code.", style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace), color = Color.White.copy(0.55f))
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("COMPLIANCE:", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = Color.White.copy(0.4f))
+                    Text("${(prog * 100).toInt()}%", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold), color = if (prog == 1f) Color(0xFF00FF66) else VibrantBlue)
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                LinearProgressIndicator(progress = { prog }, modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)), color = if (prog == 1f) Color(0xFF00FF66) else VibrantBlue, trackColor = Color.White.copy(0.06f))
+            }
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        Card(modifier = Modifier.fillMaxWidth().border(1.dp, Color.White.copy(0.06f), RoundedCornerShape(6.dp)), colors = CardDefaults.cardColors(containerColor = Color.Black.copy(0.2f)), shape = RoundedCornerShape(6.dp)) {
+            Column {
+                SafetyItem(c = ppe, onC = onPpe, title = "PPE EQUIPMENT", desc = "Helmet shade 10-13, jacket, dry welding gloves verified.")
+                HorizontalDivider(color = Color.White.copy(0.04f))
+                SafetyItem(c = vent, onC = onVent, title = "FUME VENTILATION", desc = "Exhaust extraction active, breathing zone clear.")
+                HorizontalDivider(color = Color.White.copy(0.04f))
+                SafetyItem(c = ground, onC = onGround, title = "GROUND CLAMP", desc = "Ground attached to raw bright metal, cords free of splits.")
+                HorizontalDivider(color = Color.White.copy(0.04f))
+                SafetyItem(c = gas, onC = onGas, title = "SHIELD GAS", desc = "Tanks secured, flowrate calibrated (15-20 CFH).")
+                HorizontalDivider(color = Color.White.copy(0.04f))
+                SafetyItem(c = fire, onC = onFire, title = "FIRE SUPPRESSION", desc = "Extinguisher ready, flammables cleared within 35 feet.")
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        if (prog == 1f) {
+            if (runCode == null) {
+                Button(onClick = { onRunCode("ARC-RUN-${(1000..9999).random()}") }, modifier = Modifier.fillMaxWidth().height(48.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00FF66), contentColor = Color.Black), shape = RoundedCornerShape(6.dp)) {
+                    Icon(Icons.Filled.CheckCircle, contentDescription = null, modifier = Modifier.size(18.dp)); Spacer(modifier = Modifier.width(6.dp))
+                    Text("AUTHORIZE WORK ENGINE", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace))
+                }
+            } else {
+                Card(modifier = Modifier.fillMaxWidth().border(1.dp, Color(0xFF00FF66).copy(0.35f), RoundedCornerShape(6.dp)), colors = CardDefaults.cardColors(containerColor = GunmetalGray), shape = RoundedCornerShape(6.dp)) {
+                    Column(modifier = Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("SHOP RUN-CODE SECURED", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = Color(0xFF00FF66).copy(0.7f))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(runCode, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, letterSpacing = 2.sp), color = Color(0xFF00FF66))
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("STATUS: COMPLIANT", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold), color = Color(0xFF00FF66))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(onClick = { onRunCode(null) }) { Text("REVOKE CODES", color = Color(0xFFFF4D4D), style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)) }
+                    }
+                }
+            }
+        } else {
+            Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(0.2f)).padding(12.dp), contentAlignment = Alignment.Center) {
+                Text("AWAITING SAFETY CONFIRMATION", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold), color = Color(0xFFFF4D4D))
+            }
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+@Composable
+fun SafetyItem(c: Boolean, onC: (Boolean) -> Unit, title: String, desc: String) {
+    Row(modifier = Modifier.fillMaxWidth().clickable { onC(!c) }.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Checkbox(checked = c, onCheckedChange = onC, colors = CheckboxDefaults.colors(checkedColor = Color(0xFF00FF66), uncheckedColor = Color.White.copy(0.25f), checkmarkColor = Color.Black))
+        Spacer(modifier = Modifier.width(6.dp))
+        Column {
+            Text(title, style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 11.sp), color = if (c) Color(0xFF00FF66) else Color.White)
+            Text(desc, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 10.sp), color = Color.White.copy(0.45f))
+        }
+    }
+}
+
+@Composable
+fun SetupPinUI(onPinCreated: (String) -> Unit) {
+    var pin by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf("") }
+    Column(modifier = Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(Icons.Filled.VpnKey, contentDescription = null, tint = VibrantBlue, modifier = Modifier.size(64.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("VAULT ENCRYPTION INIT", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace), color = VibrantBlue)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text("Set your 4-digit code to secure the terminal.", style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace), color = Color.White.copy(0.6f), textAlign = TextAlign.Center)
+        Spacer(modifier = Modifier.height(24.dp))
+        OutlinedTextField(value = pin, onValueChange = { pin = it }, label = { Text("Enter Passcode") }, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth(0.8f))
+        Spacer(modifier = Modifier.height(12.dp))
+        OutlinedTextField(value = confirm, onValueChange = { confirm = it }, label = { Text("Confirm Passcode") }, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth(0.8f))
+        if (error.isNotEmpty()) { Spacer(modifier = Modifier.height(8.dp)); Text(error, color = Color(0xFFFF4D4D), style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace)) }
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(onClick = { if (pin.length < 4) error = "Passcode must be at least 4 digits" else if (pin != confirm) error = "Passcodes do not match" else onPinCreated(pin) }, colors = ButtonDefaults.buttonColors(containerColor = VibrantBlue, contentColor = Color.White), shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth(0.8f).height(46.dp)) {
+            Text("INITIALIZE SECURE", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace))
+        }
+    }
+}
+
+@Composable
+fun IntelTab(viewModel: VaultViewModel) {
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp).verticalScroll(rememberScrollState())) {
+        Card(modifier = Modifier.fillMaxWidth().border(1.dp, Color.White.copy(0.06f), RoundedCornerShape(6.dp)), colors = CardDefaults.cardColors(containerColor = Color.Black.copy(0.2f)), shape = RoundedCornerShape(6.dp)) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Security, contentDescription = null, tint = VibrantBlue, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("STRATEGIC INTEL & ASSET PROTECTION", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold), color = VibrantBlue)
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("PORTFOLIO STATUS: ACTIVE", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold), color = Color.White)
+                Text("All assets secured and monitored 24/7.", style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 10.sp), color = Color.White.copy(0.6f))
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("TRADING STRATEGIES (ACTIVE)", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 10.sp), color = Color(0xFF00FF66))
+                Spacer(modifier = Modifier.height(6.dp))
+                Text("Momentum Trading - ACTIVE", style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 10.sp), color = Color.White.copy(0.6f))
+                Text("DeFi Yield Optimization - ACTIVE", style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 10.sp), color = Color.White.copy(0.6f))
+                Text("Arbitrage Scanner - ACTIVE", style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 10.sp), color = Color.White.copy(0.6f))
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Card(modifier = Modifier.fillMaxWidth().border(1.dp, Color.White.copy(0.06f), RoundedCornerShape(6.dp)), colors = CardDefaults.cardColors(containerColor = Color.Black.copy(0.2f)), shape = RoundedCornerShape(6.dp)) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.AccountBalance, contentDescription = null, tint = VibrantBlue, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("CRYPTO MARKET INTELLIGENCE", style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold), color = VibrantBlue)
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("PORTFOLIO VALUE", style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 10.sp), color = Color.White.copy(0.5f))
+                    Text("LIVE TRACKING", style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 10.sp), color = Color.White)
+                }
+                HorizontalDivider(color = Color.White.copy(0.04f), modifier = Modifier.padding(vertical = 6.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("TRADING ALGORITHMS", style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 10.sp), color = Color.White.copy(0.5f))
+                    Text("3 ACTIVE", style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 10.sp), color = Color.White)
+                }
+                HorizontalDivider(color = Color.White.copy(0.04f), modifier = Modifier.padding(vertical = 6.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("PREDICTION ENGINE", style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 10.sp), color = Color.White.copy(0.5f))
+                    Text("LEARNING MODE", style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 10.sp), color = Color(0xFF00FF66))
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Button(
+            onClick = { viewModel.generateAuditReport() },
+            enabled = !viewModel.isLoading,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = VibrantBlue, contentColor = Color.White),
+            shape = RoundedCornerShape(6.dp)
+        ) {
+            Icon(Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("GENERATE CRYPTO PORTFOLIO REPORT", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, fontSize = 11.sp))
+        }
+        if (viewModel.isLoading) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), color = VibrantBlue, strokeWidth = 2.dp)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Generating audit...", color = VibrantBlue.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+            }
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
