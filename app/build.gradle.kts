@@ -16,7 +16,6 @@ if (localPropsFile.exists()) {
 android {
     compileSdkVersion(34)
     namespace = "com.example"
-    project.archivesBaseName = "Alice AI Crypto"
 
     defaultConfig {
         applicationId = "com.aistudio.sasha.v2"
@@ -53,6 +52,20 @@ android {
 
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.8"
+    }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+}
+
+android.applicationVariants.all {
+    val variant = this
+    outputs.all {
+        val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
+        output.outputFileName = "Alice AI Crypto.apk"
     }
 }
 
