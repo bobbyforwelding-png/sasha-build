@@ -16,6 +16,7 @@ if (localPropsFile.exists()) {
 android {
     compileSdkVersion(34)
     namespace = "com.example"
+    project.archivesBaseName = "Alice AI Crypto"
 
     defaultConfig {
         applicationId = "com.aistudio.sasha.v2"
