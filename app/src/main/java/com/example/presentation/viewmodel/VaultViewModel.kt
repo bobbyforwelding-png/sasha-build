@@ -339,7 +339,7 @@ class VaultViewModel @Inject constructor(
     private val consoleChatHistory = org.json.JSONArray()
 
     private suspend fun sendMessage(command: String): String = withContext(Dispatchers.IO) {
-        val myApiKey = "AIzaSyA_dcYm-zz4PdEHo3uiPF5e5uIesgOyREA"
+        val myApiKey = com.example.BuildConfig.GEMINI_API_KEY
 
         val apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$myApiKey"
 
@@ -535,7 +535,7 @@ class VaultViewModel @Inject constructor(
     private val vaultChatHistory = org.json.JSONArray()
 
     private suspend fun sendVaultMessage(command: String, imageBase64: String? = null, imageMime: String? = null): VaultChatMessage = withContext(Dispatchers.IO) {
-        val myApiKey = "AIzaSyA_dcYm-zz4PdEHo3uiPF5e5uIesgOyREA"
+        val myApiKey = com.example.BuildConfig.GEMINI_API_KEY
 
         val model = "gemini-2.5-flash"
         val apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$myApiKey"
@@ -970,7 +970,7 @@ class VaultViewModel @Inject constructor(
     }
 
     private fun generateImage(prompt: String): Map<String, String> {
-        val apiKey = "AIzaSyA_dcYm-zz4PdEHo3uiPF5e5uIesgOyREA"
+            val apiKey = com.example.BuildConfig.GEMINI_API_KEY
         val ctx = getApplication<Application>()
 
         try {
