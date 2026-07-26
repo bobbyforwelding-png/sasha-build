@@ -76,14 +76,15 @@ fun ConsoleScreen(viewModel: VaultViewModel) {
     }
 
     DisposableEffect(context) {
-        val engine = android.speech.tts.TextToSpeech(context) { status ->
+        var engine: android.speech.tts.TextToSpeech? = null
+        engine = android.speech.tts.TextToSpeech(context) { status ->
             if (status == android.speech.tts.TextToSpeech.SUCCESS) {
-                engine.language = java.util.Locale.US
+                engine?.setLanguage(java.util.Locale.US)
                 ttsReady = true
             }
             tts = engine
         }
-        onDispose { engine.stop(); engine.shutdown() }
+        onDispose { engine?.stop(); engine?.shutdown() }
     }
 
     fun speakConsoleResponse() {
@@ -500,17 +501,19 @@ fun VaultUnrestrictedChat(viewModel: VaultViewModel) {
         }
     }
 
-    var tts: android.speech.tts.TextToSpeech? = null
+    var tts by remember { mutableStateOf<android.speech.tts.TextToSpeech?>(null) }
     var ttsReady by remember { mutableStateOf(false) }
 
     DisposableEffect(context) {
-        val engine = android.speech.tts.TextToSpeech(context) { status ->
+        var engine: android.speech.tts.TextToSpeech? = null
+        engine = android.speech.tts.TextToSpeech(context) { status ->
             if (status == android.speech.tts.TextToSpeech.SUCCESS) {
-                tts?.language = java.util.Locale.US
+                engine?.setLanguage(java.util.Locale.US)
                 ttsReady = true
             }
+            tts = engine
         }
-        onDispose { engine.stop(); engine.shutdown() }
+        onDispose { engine?.stop(); engine?.shutdown() }
     }
 
     fun speakWithVoice(text: String) {
