@@ -255,6 +255,66 @@ private fun DrawScope.drawFemaleSilhouette(cx: Float, cy: Float, baseRadius: Flo
     }
     drawPath(torsoPath, color)
 
+    // Left arm
+    val leftArmPath = Path().apply {
+        moveTo(cx - baseRadius * 0.28f, offsetY - baseRadius * 0.2f)
+        quadraticBezierTo(cx - baseRadius * 0.55f, offsetY - baseRadius * 0.15f, cx - baseRadius * 0.65f, offsetY + baseRadius * 0.1f)
+        quadraticBezierTo(cx - baseRadius * 0.68f, offsetY + baseRadius * 0.18f, cx - baseRadius * 0.62f, offsetY + baseRadius * 0.22f)
+        quadraticBezierTo(cx - baseRadius * 0.52f, offsetY + baseRadius * 0.05f, cx - baseRadius * 0.25f, offsetY - baseRadius * 0.1f)
+        close()
+    }
+    drawPath(leftArmPath, color)
+
+    // Left hand
+    drawCircle(
+        color = color,
+        radius = baseRadius * 0.06f,
+        center = Offset(cx - baseRadius * 0.65f, offsetY + baseRadius * 0.2f)
+    )
+    // Left fingers
+    for (f in 0..3) {
+        val angle = -30f + f * 20f
+        val fingerLen = baseRadius * 0.08f
+        val fx = cx - baseRadius * 0.65f + cos(Math.toRadians(angle.toDouble())).toFloat() * fingerLen
+        val fy = offsetY + baseRadius * 0.2f + sin(Math.toRadians(angle.toDouble())).toFloat() * fingerLen
+        drawLine(
+            color = color,
+            start = Offset(cx - baseRadius * 0.65f, offsetY + baseRadius * 0.2f),
+            end = Offset(fx, fy),
+            strokeWidth = 1.5f
+        )
+    }
+
+    // Right arm
+    val rightArmPath = Path().apply {
+        moveTo(cx + baseRadius * 0.28f, offsetY - baseRadius * 0.2f)
+        quadraticBezierTo(cx + baseRadius * 0.55f, offsetY - baseRadius * 0.15f, cx + baseRadius * 0.65f, offsetY + baseRadius * 0.1f)
+        quadraticBezierTo(cx + baseRadius * 0.68f, offsetY + baseRadius * 0.18f, cx + baseRadius * 0.62f, offsetY + baseRadius * 0.22f)
+        quadraticBezierTo(cx + baseRadius * 0.52f, offsetY + baseRadius * 0.05f, cx + baseRadius * 0.25f, offsetY - baseRadius * 0.1f)
+        close()
+    }
+    drawPath(rightArmPath, color)
+
+    // Right hand
+    drawCircle(
+        color = color,
+        radius = baseRadius * 0.06f,
+        center = Offset(cx + baseRadius * 0.65f, offsetY + baseRadius * 0.2f)
+    )
+    // Right fingers
+    for (f in 0..3) {
+        val angle = 200f + f * 20f
+        val fingerLen = baseRadius * 0.08f
+        val fx = cx + baseRadius * 0.65f + cos(Math.toRadians(angle.toDouble())).toFloat() * fingerLen
+        val fy = offsetY + baseRadius * 0.2f + sin(Math.toRadians(angle.toDouble())).toFloat() * fingerLen
+        drawLine(
+            color = color,
+            start = Offset(cx + baseRadius * 0.65f, offsetY + baseRadius * 0.2f),
+            end = Offset(fx, fy),
+            strokeWidth = 1.5f
+        )
+    }
+
     // Hips
     val hipPath = Path().apply {
         moveTo(cx - baseRadius * 0.22f, offsetY + baseRadius * 0.15f)

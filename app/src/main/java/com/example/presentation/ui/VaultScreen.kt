@@ -868,8 +868,17 @@ fun WatermarkBackground() {
 }
 
 @Composable
-fun VaultScreen(viewModel: VaultViewModel = hiltViewModel()) {
+fun VaultScreen(
+    viewModel: VaultViewModel = hiltViewModel(),
+    onRequestScreenShare: (VaultViewModel) -> Unit = {}
+) {
     val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(viewModel.pendingScreenShareRequest) {
+        if (viewModel.pendingScreenShareRequest) {
+            onRequestScreenShare(viewModel)
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(GunmetalGray)) {
         WatermarkBackground()
