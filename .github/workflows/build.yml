@@ -25,4 +25,3 @@ jobs:
         with:
           name: sasha-debug
           path: app/build/outputs/apk/debug/app-debug.apk
-t
