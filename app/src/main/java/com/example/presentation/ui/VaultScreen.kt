@@ -870,13 +870,18 @@ fun WatermarkBackground() {
 @Composable
 fun VaultScreen(
     viewModel: VaultViewModel = hiltViewModel(),
-    onRequestScreenShare: (VaultViewModel) -> Unit = {}
+    onRequestScreenShare: ((callback: (resultCode: Int, data: Intent?) -> Unit) -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     LaunchedEffect(viewModel.pendingScreenShareRequest) {
-        if (viewModel.pendingScreenShareRequest) {
-            onRequestScreenShare(viewModel)
+        if (viewModel.pendingScreenShareRequest && onRequestScreenShare != null) {
+            onRequestScreenShare { resultCode, data ->
+                if (data != null) {
+                    viewModel.onScreenShareApproved(resultCode, data)
+                }
+            }
         }
     }
 

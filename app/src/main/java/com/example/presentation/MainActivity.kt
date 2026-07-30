@@ -1,7 +1,6 @@
 package com.example.presentation
 
 import android.content.Intent
-import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -15,15 +14,11 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    private var pendingVaultViewModel: com.example.presentation.viewmodel.VaultViewModel? = null
+    private var pendingScreenShareCallback: ((resultCode: Int, data: Intent?) -> Unit)? = null
 
-    private val mediaProjectionLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == RESULT_OK && result.data != null) {
-            pendingVaultViewModel?.onScreenShareApproved(result.resultCode, result.data!!)
-        }
-        pendingVaultViewModel = null
+    private val screenShareLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        pendingScreenShareCallback?.invoke(result.resultCode, result.data)
+        pendingScreenShareCallback = null
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,11 +27,14 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             AppTheme {
-                VaultScreen(onRequestScreenShare = { vm ->
-                    pendingVaultViewModel = vm
-                    val projectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                    mediaProjectionLauncher.launch(projectionManager.createScreenCaptureIntent())
-                })
+                VaultScreen(
+                    onRequestScreenShare = { callback ->
+                        pendingScreenShareCallback = callback
+                        val intent = android.media.projection.MediaProjectionManager::class.java
+                        val mgr = getSystemService(android.content.Context.MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+                        screenShareLauncher.launch(mgr.createScreenCaptureIntent())
+                    }
+                )
             }
         }
     }
