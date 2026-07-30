@@ -18,11 +18,11 @@ android {
     namespace = "com.example"
 
     defaultConfig {
-        applicationId = "com.aistudio.sasha.v2"
+        applicationId = "com.aistudio.sasha.v4"
         minSdkVersion(24)
         targetSdkVersion(34)
-        versionCode = 2
-        versionName = "2.0"
+        versionCode = 14
+        versionName = "14.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "GEMINI_API_KEY", "\"${localProps.getProperty("GEMINI_API_KEY", "")}\"")
