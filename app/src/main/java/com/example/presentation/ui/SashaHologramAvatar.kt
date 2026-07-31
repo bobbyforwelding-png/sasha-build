@@ -128,7 +128,8 @@ fun SashaHologramAvatar(
         drawContext.canvas.restore()
 
         // Female silhouette
-        drawFemaleSilhouette(cx, cy, baseRadius, primaryColor.copy(alpha = 0.6f * breathAlpha), accentColor.copy(alpha = 0.3f * breathAlpha))
+        val sillState = state
+        drawFemaleSilhouette(cx, cy, baseRadius, primaryColor.copy(alpha = 0.6f * breathAlpha), accentColor.copy(alpha = 0.3f * breathAlpha), sillState, wavePhase)
 
         // Core light
         drawCircle(
@@ -206,78 +207,162 @@ private fun DrawScope.drawOvalRingV(cx: Float, cy: Float, radius: Float, color: 
     )
 }
 
-private fun DrawScope.drawFemaleSilhouette(cx: Float, cy: Float, baseRadius: Float, color: Color, glowColor: Color) {
+private fun DrawScope.drawFemaleSilhouette(cx: Float, cy: Float, baseRadius: Float, color: Color, glowColor: Color, state: AvatarState = AvatarState.IDLE, wavePhase: Float = 0f) {
     val s = baseRadius * 0.012f
     val offsetY = cy - baseRadius * 0.15f
 
-    // Head
-    drawCircle(
-        color = color,
-        radius = baseRadius * 0.18f,
-        center = Offset(cx, offsetY - baseRadius * 0.55f)
-    )
-    drawCircle(
-        color = glowColor,
-        radius = baseRadius * 0.22f,
-        center = Offset(cx, offsetY - baseRadius * 0.55f),
-        style = Stroke(width = 1f)
-    )
+    // --- HEAD ---
+    val headCY = offsetY - baseRadius * 0.55f
+    drawCircle(color = color, radius = baseRadius * 0.18f, center = Offset(cx, headCY))
+    drawCircle(color = glowColor, radius = baseRadius * 0.22f, center = Offset(cx, headCY), style = Stroke(width = 1f))
 
-    // Hair silhouette (wider top flowing down)
+    // --- HAIR ---
     val hairPath = Path().apply {
-        moveTo(cx - baseRadius * 0.22f, offsetY - baseRadius * 0.6f)
-        quadraticBezierTo(cx - baseRadius * 0.35f, offsetY - baseRadius * 0.8f, cx, offsetY - baseRadius * 0.82f)
-        quadraticBezierTo(cx + baseRadius * 0.35f, offsetY - baseRadius * 0.8f, cx + baseRadius * 0.22f, offsetY - baseRadius * 0.6f)
-        quadraticBezierTo(cx + baseRadius * 0.28f, offsetY - baseRadius * 0.35f, cx + baseRadius * 0.2f, offsetY - baseRadius * 0.2f)
-        lineTo(cx - baseRadius * 0.2f, offsetY - baseRadius * 0.2f)
-        quadraticBezierTo(cx - baseRadius * 0.28f, offsetY - baseRadius * 0.35f, cx - baseRadius * 0.22f, offsetY - baseRadius * 0.6f)
+        moveTo(cx - baseRadius * 0.22f, headCY + baseRadius * 0.02f)
+        quadraticBezierTo(cx - baseRadius * 0.35f, headCY - baseRadius * 0.25f, cx, headCY - baseRadius * 0.27f)
+        quadraticBezierTo(cx + baseRadius * 0.35f, headCY - baseRadius * 0.25f, cx + baseRadius * 0.22f, headCY + baseRadius * 0.02f)
+        quadraticBezierTo(cx + baseRadius * 0.28f, headCY + baseRadius * 0.2f, cx + baseRadius * 0.2f, headCY + baseRadius * 0.35f)
+        lineTo(cx - baseRadius * 0.2f, headCY + baseRadius * 0.35f)
+        quadraticBezierTo(cx - baseRadius * 0.28f, headCY + baseRadius * 0.2f, cx - baseRadius * 0.22f, headCY + baseRadius * 0.02f)
         close()
     }
     drawPath(hairPath, color.copy(alpha = color.alpha * 0.7f))
 
-    // Neck
-    drawRect(
+    // --- EYES ---
+    val eyeY = headCY + baseRadius * 0.02f
+    val eyeSpacing = baseRadius * 0.08f
+    val eyeSize = baseRadius * 0.035f
+    // Left eye
+    drawCircle(color = glowColor.copy(alpha = 0.9f), radius = eyeSize, center = Offset(cx - eyeSpacing, eyeY))
+    drawCircle(color = Color.White.copy(alpha = 0.8f), radius = eyeSize * 0.4f, center = Offset(cx - eyeSpacing, eyeY))
+    // Right eye
+    drawCircle(color = glowColor.copy(alpha = 0.9f), radius = eyeSize, center = Offset(cx + eyeSpacing, eyeY))
+    drawCircle(color = Color.White.copy(alpha = 0.8f), radius = eyeSize * 0.4f, center = Offset(cx + eyeSpacing, eyeY))
+
+    // --- MOUTH ---
+    val mouthY = eyeY + baseRadius * 0.1f
+    val mouthWidth = baseRadius * 0.08f
+    val mouthOpen = when (state) {
+        AvatarState.SPEAKING -> abs(sin(wavePhase * 3f)) * 0.5f + 0.2f
+        else -> 0.08f
+    }
+    // Lips - upper
+    drawArc(
         color = color,
-        topLeft = Offset(cx - baseRadius * 0.05f, offsetY - baseRadius * 0.38f),
-        size = androidx.compose.ui.geometry.Size(baseRadius * 0.1f, baseRadius * 0.12f)
+        startAngle = 180f, sweepAngle = 180f,
+        useCenter = false,
+        topLeft = Offset(cx - mouthWidth, mouthY - baseRadius * 0.02f),
+        size = androidx.compose.ui.geometry.Size(mouthWidth * 2f, baseRadius * 0.04f),
+        style = Stroke(width = 1.2f)
+    )
+    // Lips - lower / mouth opening
+    drawArc(
+        color = glowColor.copy(alpha = 0.6f),
+        startAngle = 0f, sweepAngle = 180f,
+        useCenter = false,
+        topLeft = Offset(cx - mouthWidth * mouthOpen, mouthY - baseRadius * 0.01f),
+        size = androidx.compose.ui.geometry.Size(mouthWidth * 2f * mouthOpen, baseRadius * 0.04f * mouthOpen),
+        style = Stroke(width = 0.8f)
     )
 
-    // Shoulders + Torso
+    // --- NECK ---
+    val neckTop = headCY + baseRadius * 0.17f
+    drawRect(color = color, topLeft = Offset(cx - baseRadius * 0.05f, neckTop), size = androidx.compose.ui.geometry.Size(baseRadius * 0.1f, baseRadius * 0.12f))
+
+    // --- TORSO ---
+    val shoulderY = neckTop + baseRadius * 0.12f
+    val waistY = shoulderY + baseRadius * 0.35f
+    val hipY = waistY + baseRadius * 0.15f
     val torsoPath = Path().apply {
-        moveTo(cx - baseRadius * 0.05f, offsetY - baseRadius * 0.28f)
-        quadraticBezierTo(cx - baseRadius * 0.3f, offsetY - baseRadius * 0.25f, cx - baseRadius * 0.28f, offsetY - baseRadius * 0.15f)
-        lineTo(cx - baseRadius * 0.22f, offsetY + baseRadius * 0.15f)
-        quadraticBezierTo(cx - baseRadius * 0.18f, offsetY + baseRadius * 0.25f, cx, offsetY + baseRadius * 0.2f)
-        quadraticBezierTo(cx + baseRadius * 0.18f, offsetY + baseRadius * 0.25f, cx + baseRadius * 0.22f, offsetY + baseRadius * 0.15f)
-        lineTo(cx + baseRadius * 0.28f, offsetY - baseRadius * 0.15f)
-        quadraticBezierTo(cx + baseRadius * 0.3f, offsetY - baseRadius * 0.25f, cx + baseRadius * 0.05f, offsetY - baseRadius * 0.28f)
+        moveTo(cx - baseRadius * 0.05f, shoulderY)
+        quadraticBezierTo(cx - baseRadius * 0.3f, shoulderY + baseRadius * 0.03f, cx - baseRadius * 0.28f, shoulderY + baseRadius * 0.12f)
+        lineTo(cx - baseRadius * 0.2f, waistY)
+        quadraticBezierTo(cx - baseRadius * 0.18f, waistY + baseRadius * 0.08f, cx - baseRadius * 0.22f, hipY)
+        quadraticBezierTo(cx - baseRadius * 0.25f, hipY + baseRadius * 0.15f, cx - baseRadius * 0.18f, hipY + baseRadius * 0.3f)
+        lineTo(cx - baseRadius * 0.1f, hipY + baseRadius * 0.45f)
+        quadraticBezierTo(cx, hipY + baseRadius * 0.4f, cx + baseRadius * 0.1f, hipY + baseRadius * 0.45f)
+        lineTo(cx + baseRadius * 0.18f, hipY + baseRadius * 0.3f)
+        quadraticBezierTo(cx + baseRadius * 0.25f, hipY + baseRadius * 0.15f, cx + baseRadius * 0.22f, hipY)
+        quadraticBezierTo(cx + baseRadius * 0.18f, waistY + baseRadius * 0.08f, cx + baseRadius * 0.2f, waistY)
+        lineTo(cx + baseRadius * 0.28f, shoulderY + baseRadius * 0.12f)
+        quadraticBezierTo(cx + baseRadius * 0.3f, shoulderY + baseRadius * 0.03f, cx + baseRadius * 0.05f, shoulderY)
         close()
     }
     drawPath(torsoPath, color)
-
-    // Hips
-    val hipPath = Path().apply {
-        moveTo(cx - baseRadius * 0.22f, offsetY + baseRadius * 0.15f)
-        quadraticBezierTo(cx - baseRadius * 0.25f, offsetY + baseRadius * 0.3f, cx - baseRadius * 0.18f, offsetY + baseRadius * 0.45f)
-        lineTo(cx - baseRadius * 0.1f, offsetY + baseRadius * 0.6f)
-        quadraticBezierTo(cx, offsetY + baseRadius * 0.55f, cx + baseRadius * 0.1f, offsetY + baseRadius * 0.6f)
-        lineTo(cx + baseRadius * 0.18f, offsetY + baseRadius * 0.45f)
-        quadraticBezierTo(cx + baseRadius * 0.25f, offsetY + baseRadius * 0.3f, cx + baseRadius * 0.22f, offsetY + baseRadius * 0.15f)
-        close()
-    }
-    drawPath(hipPath, color)
-
-    // Glow outline on torso
     drawPath(torsoPath, glowColor, style = Stroke(width = 0.8f))
-    drawPath(hipPath, glowColor, style = Stroke(width = 0.8f))
 
-    // Scan lines effect (horizontal lines across the whole figure)
-    for (i in 0..12) {
-        val lineY = offsetY - baseRadius * 0.6f + (baseRadius * 1.2f / 12f) * i
+    // --- ARMS ---
+    val armSwing = sin(wavePhase * 0.5f) * 0.03f * baseRadius
+    // Left arm
+    val leftArmPath = Path().apply {
+        moveTo(cx - baseRadius * 0.28f, shoulderY + baseRadius * 0.08f)
+        quadraticBezierTo(cx - baseRadius * 0.38f, shoulderY + baseRadius * 0.2f, cx - baseRadius * 0.35f + armSwing, shoulderY + baseRadius * 0.5f)
+        lineTo(cx - baseRadius * 0.3f + armSwing, hipY + baseRadius * 0.25f)
+    }
+    drawPath(leftArmPath, color, style = Stroke(width = baseRadius * 0.06f, cap = StrokeCap.Round))
+    // Right arm
+    val rightArmPath = Path().apply {
+        moveTo(cx + baseRadius * 0.28f, shoulderY + baseRadius * 0.08f)
+        quadraticBezierTo(cx + baseRadius * 0.38f, shoulderY + baseRadius * 0.2f, cx + baseRadius * 0.35f - armSwing, shoulderY + baseRadius * 0.5f)
+        lineTo(cx + baseRadius * 0.3f - armSwing, hipY + baseRadius * 0.25f)
+    }
+    drawPath(rightArmPath, color, style = Stroke(width = baseRadius * 0.06f, cap = StrokeCap.Round))
+
+    // --- HANDS with FINGERS ---
+    val handCY = hipY + baseRadius * 0.25f
+    // Left hand
+    val lhx = cx - baseRadius * 0.3f + armSwing
+    drawCircle(color = color.copy(alpha = 0.8f), radius = baseRadius * 0.04f, center = Offset(lhx, handCY))
+    // Fingers
+    val fingerLen = baseRadius * 0.04f
+    for (i in -2..2) {
+        val angle = i * 20f * PI.toFloat() / 180f
+        val fx = lhx + cos(angle + PI.toFloat()/2f) * fingerLen
+        val fy = handCY + sin(angle + PI.toFloat()/2f) * fingerLen
+        drawLine(color = color.copy(alpha = 0.6f), start = Offset(lhx, handCY), end = Offset(fx, fy), strokeWidth = 1.5f)
+    }
+    // Right hand
+    val rhx = cx + baseRadius * 0.3f - armSwing
+    drawCircle(color = color.copy(alpha = 0.8f), radius = baseRadius * 0.04f, center = Offset(rhx, handCY))
+    for (i in -2..2) {
+        val angle = i * 20f * PI.toFloat() / 180f
+        val fx = rhx + cos(PI.toFloat() - angle + PI.toFloat()/2f) * fingerLen
+        val fy = handCY + sin(PI.toFloat() - angle + PI.toFloat()/2f) * fingerLen
+        drawLine(color = color.copy(alpha = 0.6f), start = Offset(rhx, handCY), end = Offset(fx, fy), strokeWidth = 1.5f)
+    }
+
+    // --- LEGS ---
+    val legTop = hipY + baseRadius * 0.35f
+    val kneeY = legTop + baseRadius * 0.25f
+    val footY = kneeY + baseRadius * 0.25f
+    val legSwing = sin(wavePhase * 0.7f) * 0.02f * baseRadius
+    // Left leg
+    val leftLegPath = Path().apply {
+        moveTo(cx - baseRadius * 0.1f, legTop)
+        quadraticBezierTo(cx - baseRadius * 0.12f + legSwing, kneeY, cx - baseRadius * 0.08f + legSwing, footY)
+    }
+    drawPath(leftLegPath, color, style = Stroke(width = baseRadius * 0.08f, cap = StrokeCap.Round))
+    // Right leg
+    val rightLegPath = Path().apply {
+        moveTo(cx + baseRadius * 0.1f, legTop)
+        quadraticBezierTo(cx + baseRadius * 0.12f - legSwing, kneeY, cx + baseRadius * 0.08f - legSwing, footY)
+    }
+    drawPath(rightLegPath, color, style = Stroke(width = baseRadius * 0.08f, cap = StrokeCap.Round))
+
+    // --- FEET ---
+    drawCircle(color = color.copy(alpha = 0.7f), radius = baseRadius * 0.03f, center = Offset(cx - baseRadius * 0.08f + legSwing, footY))
+    drawCircle(color = color.copy(alpha = 0.7f), radius = baseRadius * 0.03f, center = Offset(cx + baseRadius * 0.08f - legSwing, footY))
+
+    // --- GLOW OUTLINE on torso/hips ---
+    drawPath(torsoPath, glowColor, style = Stroke(width = 0.8f))
+
+    // --- SCAN LINES ---
+    for (i in 0..16) {
+        val lineY = headCY - baseRadius * 0.25f + (baseRadius * 2f / 16f) * i
         drawLine(
-            color = color.copy(alpha = 0.08f),
-            start = Offset(cx - baseRadius * 0.3f, lineY),
-            end = Offset(cx + baseRadius * 0.3f, lineY),
+            color = color.copy(alpha = 0.06f),
+            start = Offset(cx - baseRadius * 0.35f, lineY),
+            end = Offset(cx + baseRadius * 0.35f, lineY),
             strokeWidth = 0.5f
         )
     }
