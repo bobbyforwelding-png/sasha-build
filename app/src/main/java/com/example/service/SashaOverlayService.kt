@@ -22,6 +22,7 @@ import android.view.WindowManager
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import java.util.Locale
 
 class SashaOverlayService : Service() {
@@ -93,7 +94,6 @@ class SashaOverlayService : Service() {
             settings.allowFileAccess = true
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
-            settings.renderPriority = WebSettings.RenderPriority.HIGH
             setBackgroundColor(0x00000000)
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
             webViewClient = object : WebViewClient() {
@@ -126,7 +126,7 @@ class SashaOverlayService : Service() {
             y = 0
         }
 
-        val container = View(this).apply {
+        val container = FrameLayout(this).apply {
             setBackgroundColor(0x00000000)
             setOnTouchListener { _, event ->
                 touchHandler(event)
@@ -136,7 +136,7 @@ class SashaOverlayService : Service() {
         overlayView = container
 
         wm.addView(container, params)
-        container.addView(webView, WindowManager.LayoutParams(screenWidth, screenHeight))
+        container.addView(webView, FrameLayout.LayoutParams(screenWidth, screenHeight))
     }
 
     private var touchStartX = 0
