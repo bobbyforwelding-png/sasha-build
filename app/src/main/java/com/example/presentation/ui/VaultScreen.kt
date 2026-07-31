@@ -870,10 +870,13 @@ fun WatermarkBackground() {
 @Composable
 fun VaultScreen(
     viewModel: VaultViewModel = hiltViewModel(),
-    onRequestScreenShare: ((callback: (resultCode: Int, data: Intent?) -> Unit) -> Unit)? = null
+    onRequestScreenShare: ((callback: (resultCode: Int, data: Intent?) -> Unit) -> Unit)? = null,
+    onRequestOverlay: (() -> Unit)? = null,
+    onStopOverlay: (() -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
+    val overlayRunning by remember { mutableStateOf(com.example.service.SashaOverlayService.isRunning) }
 
     LaunchedEffect(viewModel.pendingScreenShareRequest) {
         if (viewModel.pendingScreenShareRequest && onRequestScreenShare != null) {
@@ -893,13 +896,19 @@ fun VaultScreen(
         } else if (!uiState.isUnlocked) {
             PINEntryGate(viewModel, uiState.loginError)
         } else {
-            MainVaultDashboard(viewModel, uiState)
+            MainVaultDashboard(viewModel, uiState, onRequestOverlay, onStopOverlay, overlayRunning)
         }
     }
 }
 
 @Composable
-fun MainVaultDashboard(viewModel: VaultViewModel, uiState: VaultUiState) {
+fun MainVaultDashboard(
+    viewModel: VaultViewModel,
+    uiState: VaultUiState,
+    onRequestOverlay: (() -> Unit)? = null,
+    onStopOverlay: (() -> Unit)? = null,
+    overlayRunning: Boolean = false
+) {
     var activePage by remember { mutableStateOf("CONSOLE") }
     var showSettings by remember { mutableStateOf(false) }
     val neonCyan = Color(0xFF00E5FF)
@@ -926,6 +935,37 @@ fun MainVaultDashboard(viewModel: VaultViewModel, uiState: VaultUiState) {
                     primaryColor = neonCyan,
                     onAvatarUrlChange = { viewModel.saveAvatarUrl(it) }
                 )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                val overlayButtonColor = if (overlayRunning) neonCyan else neonPurple
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(overlayButtonColor.copy(alpha = 0.15f))
+                        .border(1.dp, overlayButtonColor.copy(alpha = 0.6f), RoundedCornerShape(20.dp))
+                        .clickable {
+                            if (overlayRunning) {
+                                onStopOverlay?.invoke()
+                            } else {
+                                onRequestOverlay?.invoke()
+                            }
+                        }
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = if (overlayRunning) "● SASHA IS WITH YOU — TAP TO DISMISS" else "LET SASHA OUT — SHE WALKS OVER EVERY APP",
+                        color = overlayButtonColor,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(6.dp))
