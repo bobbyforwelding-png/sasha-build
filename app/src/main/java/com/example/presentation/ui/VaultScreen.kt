@@ -401,16 +401,18 @@ fun VaultChatTerminal(viewModel: VaultViewModel, uiState: VaultUiState) {
                         "FILES" -> IntelTab(viewModel)
                         "CODEX" -> PrivateCodexEditor(viewModel)
                         "PROJECTS" -> ProjectsScreen(viewModel)
+                        "GO LIVE" -> GoLiveScreen(viewModel)
                     }
                 }
             }
         }
 
-        Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             VaultButton("CHAT", active = (activeVaultTab == "CHAT"), color = personaColor) { activeVaultTab = "CHAT" }
             VaultButton("FILES", active = (activeVaultTab == "FILES"), color = personaColor) { activeVaultTab = "FILES" }
             VaultButton("CODEX", active = (activeVaultTab == "CODEX"), color = personaColor) { activeVaultTab = "CODEX" }
             VaultButton("PROJECTS", active = (activeVaultTab == "PROJECTS"), color = personaColor) { activeVaultTab = "PROJECTS" }
+            VaultButton("GO LIVE", active = (activeVaultTab == "GO LIVE"), color = Color(0xFFFF2D55)) { activeVaultTab = "GO LIVE" }
         }
     }
 }
@@ -735,7 +737,178 @@ fun VaultUnrestrictedChat(viewModel: VaultViewModel) {
 }
 
 @Composable
-fun PrivateCodexEditor(viewModel: VaultViewModel) {
+fun GoLiveScreen(viewModel: VaultViewModel) {
+    val context = LocalContext.current
+    val liveRed = Color(0xFFFF2D55)
+    val darkBg = Color(0xFF0A0A0F)
+    val darkCard = Color(0xFF1A1A24)
+
+    data class LivePlatform(val name: String, val color: Color, val packageName: String, val fallbackUrl: String)
+
+    val platforms = listOf(
+        LivePlatform("YouTube Live", Color(0xFFFF0000), "com.google.android.youtube", "https://www.youtube.com/livestreaming"),
+        LivePlatform("Facebook Live", Color(0xFF1877F2), "com.facebook.katana", "https://www.facebook.com/live/producer"),
+        LivePlatform("Instagram Live", Color(0xFFE1306C), "com.instagram.android", "https://www.instagram.com/"),
+        LivePlatform("TikTok Live", Color(0xFF00F2EA), "com.zhiliaoapp.musically", "https://www.tiktok.com/live"),
+        LivePlatform("Twitch", Color(0xFF9146FF), "tv.twitch.android.app", "https://www.twitch.tv/broadcast/dashboard"),
+        LivePlatform("X / Twitter", Color(0xFF1DA1F2), "com.twitter.android", "https://twitter.com/i/broadcasts")
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(darkBg)
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        // Header
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 16.dp)) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .background(liveRed, shape = RoundedCornerShape(50))
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                "GO LIVE",
+                color = liveRed,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                "SELECT PLATFORM",
+                color = Color.White.copy(alpha = 0.4f),
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp
+            )
+        }
+
+        Text(
+            "TAP TO LAUNCH YOUR STREAM",
+            color = Color.White.copy(alpha = 0.3f),
+            fontFamily = FontFamily.Monospace,
+            fontSize = 10.sp,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+
+        // Platform grid — two columns
+        platforms.chunked(2).forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                row.forEach { platform ->
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(88.dp)
+                            .clickable {
+                                val pm = context.packageManager
+                                val launchIntent = pm.getLaunchIntentForPackage(platform.packageName)
+                                if (launchIntent != null) {
+                                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    context.startActivity(launchIntent)
+                                } else {
+                                    val browserIntent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(platform.fallbackUrl))
+                                    browserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    context.startActivity(browserIntent)
+                                }
+                            }
+                            .border(1.dp, platform.color.copy(alpha = 0.5f), RoundedCornerShape(10.dp)),
+                        colors = CardDefaults.cardColors(containerColor = darkCard),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(12.dp),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                Icons.Filled.Videocam,
+                                contentDescription = null,
+                                tint = platform.color,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                platform.name,
+                                color = platform.color,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+                // Fill empty slot if odd number
+                if (row.size == 1) Spacer(modifier = Modifier.weight(1f))
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Screen share section
+        Text(
+            "SASHA SCREEN MONITOR",
+            color = Color(0xFF00E5FF),
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        Text(
+            "Let Sasha watch your screen during the stream to provide real-time advice.",
+            color = Color.White.copy(alpha = 0.5f),
+            fontFamily = FontFamily.Monospace,
+            fontSize = 10.sp,
+            lineHeight = 14.sp,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+
+        val screenShareActive = com.example.service.ScreenShareService.isActive
+        Button(
+            onClick = {
+                if (screenShareActive) {
+                    context.startService(
+                        Intent(context, com.example.service.ScreenShareService::class.java).apply {
+                            action = com.example.service.ScreenShareService.ACTION_STOP
+                        }
+                    )
+                } else {
+                    viewModel.requestScreenShare()
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (screenShareActive) Color(0xFF1A1A24) else Color(0xFF00E5FF).copy(alpha = 0.15f)
+            ),
+            shape = RoundedCornerShape(8.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, if (screenShareActive) liveRed else Color(0xFF00E5FF).copy(alpha = 0.5f))
+        ) {
+            Icon(
+                if (screenShareActive) Icons.Filled.StopCircle else Icons.Filled.Visibility,
+                contentDescription = null,
+                tint = if (screenShareActive) liveRed else Color(0xFF00E5FF),
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                if (screenShareActive) "STOP SCREEN MONITOR" else "START SCREEN MONITOR",
+                color = if (screenShareActive) liveRed else Color(0xFF00E5FF),
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp
+            )
+        }
+    }
+}
+
+@Composable
     val neonBlue = Color(0xFF00E5FF)
     val languages = listOf("Kotlin", "Python", "Java", "JavaScript", "Compose UI", "XML", "Shell", "SQL")
     var selectedLanguage by remember { mutableStateOf("Kotlin") }

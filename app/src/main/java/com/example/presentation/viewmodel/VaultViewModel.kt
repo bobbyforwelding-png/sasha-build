@@ -1237,6 +1237,10 @@ GENERATE THIS VIDEO using the link below.
     var pendingScreenShareRequest = false
         private set
 
+    fun requestScreenShare() {
+        pendingScreenShareRequest = true
+    }
+
     fun onScreenShareApproved(resultCode: Int, data: Intent) {
         val ctx = getApplication<Application>()
         ctx.startForegroundService(Intent(ctx, com.example.service.ScreenShareService::class.java).apply {
