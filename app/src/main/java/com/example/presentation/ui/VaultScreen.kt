@@ -136,7 +136,7 @@ fun ConsoleScreen(viewModel: VaultViewModel) {
         viewModel.isSpeaking = true
     }
 
-    // Auto-speak + hands-free loop: trigger after each new SASHA response
+    // Auto-scroll: trigger on list size change and when loading finishes (response fully laid out)
     LaunchedEffect(viewModel.consoleLog.size) {
         if (viewModel.consoleLog.isNotEmpty()) {
             listState.animateScrollToItem(viewModel.consoleLog.size - 1)
@@ -145,6 +145,15 @@ fun ConsoleScreen(viewModel: VaultViewModel) {
                     if (handsFreeEnabled) launchSpeechInput()
                 }
             }
+        }
+    }
+    // Scroll again once loading completes so the full response is visible after layout
+    val consoleResponseKey by remember {
+        derivedStateOf { if (!viewModel.isLoading) viewModel.consoleLog.size else -1 }
+    }
+    LaunchedEffect(consoleResponseKey) {
+        if (consoleResponseKey > 0) {
+            listState.animateScrollToItem(consoleResponseKey - 1)
         }
     }
 
@@ -420,6 +429,14 @@ fun ProjectsScreen(viewModel: VaultViewModel) {
             listState.animateScrollToItem(viewModel.projectsLog.size - 1)
         }
     }
+    val projectsResponseKey by remember {
+        derivedStateOf { if (!viewModel.isLoading) viewModel.projectsLog.size else -1 }
+    }
+    LaunchedEffect(projectsResponseKey) {
+        if (projectsResponseKey > 0) {
+            listState.animateScrollToItem(projectsResponseKey - 1)
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
         Row(modifier = Modifier.fillMaxWidth().background(darkSurface.copy(alpha = 0.85f), RoundedCornerShape(8.dp)).padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -591,6 +608,14 @@ fun VaultUnrestrictedChat(viewModel: VaultViewModel) {
     LaunchedEffect(viewModel.unrestrictedLog.size) {
         if (viewModel.unrestrictedLog.isNotEmpty()) {
             listState.animateScrollToItem(viewModel.unrestrictedLog.size - 1)
+        }
+    }
+    val unrestrictedResponseKey by remember {
+        derivedStateOf { if (!viewModel.isLoading) viewModel.unrestrictedLog.size else -1 }
+    }
+    LaunchedEffect(unrestrictedResponseKey) {
+        if (unrestrictedResponseKey > 0) {
+            listState.animateScrollToItem(unrestrictedResponseKey - 1)
         }
     }
 
