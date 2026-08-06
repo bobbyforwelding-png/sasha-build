@@ -113,9 +113,6 @@ fun ConsoleScreen(viewModel: VaultViewModel) {
         val lastResponse = viewModel.consoleLog.lastOrNull { !it.startsWith("USER:") } ?: return
         val clean = lastResponse.removePrefix("SASHA: ").trim()
         if (clean.isBlank()) { onDoneCallback?.invoke(); return }
-        tts?.speak(clean, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "console_utterance")
-        isSpeaking = true
-        viewModel.isSpeaking = true
         val handler = android.os.Handler(android.os.Looper.getMainLooper())
         tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
             override fun onStart(id: String?) {}
@@ -134,6 +131,9 @@ fun ConsoleScreen(viewModel: VaultViewModel) {
                 }
             }
         })
+        tts?.speak(clean, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "console_utterance")
+        isSpeaking = true
+        viewModel.isSpeaking = true
     }
 
     // Auto-speak + hands-free loop: trigger after each new SASHA response

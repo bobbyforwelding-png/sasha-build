@@ -224,7 +224,7 @@ fun SashaHologramAvatar(
                 textAlign = android.graphics.Paint.Align.CENTER
                 letterSpacing = 0.25f
             }
-            drawText("S . A . S . H . A .", cx, frameB - baseRadius * 0.06f, paint)
+            drawText("S . A . S . H . A .", cx, frameB + baseRadius * 0.25f, paint)
         }
     }
 }
