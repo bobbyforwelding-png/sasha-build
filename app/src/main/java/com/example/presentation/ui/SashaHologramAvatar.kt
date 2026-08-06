@@ -21,9 +21,9 @@ enum class AvatarState {
 fun SashaHologramAvatar(
     state: AvatarState = AvatarState.IDLE,
     modifier: Modifier = Modifier,
-    primaryColor: Color = Color(0xFF00E5FF),
-    accentColor: Color = Color(0xFFFF4D4D),
-    glowColor: Color = Color(0xFF00E5FF)
+    primaryColor: Color = Color(0xFF00BFFF),
+    accentColor: Color = Color(0xFF8B5CF6),
+    glowColor: Color = Color(0xFF00BFFF)
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "sasha_avatar")
 
@@ -97,7 +97,7 @@ fun SashaHologramAvatar(
     Canvas(modifier = modifier) {
         val cx = size.width / 2f
         val cy = size.height / 2f
-        val baseRadius = minOf(cx, cy) * 0.35f
+        val baseRadius = minOf(cx, cy) * 0.42f
 
         // Outer glow halo
         for (i in 5 downTo 0) {
@@ -185,6 +185,46 @@ fun SashaHologramAvatar(
                 center = Offset(cx, cy),
                 style = Stroke(width = 0.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 12f)))
             )
+        }
+
+        // HUD frame — cyberpunk targeting reticle with corner brackets
+        val frameL = cx - baseRadius * 1.55f
+        val frameR = cx + baseRadius * 1.55f
+        val frameT = cy - baseRadius * 1.7f
+        val frameB = cy + baseRadius * 1.25f
+        val bracket = baseRadius * 0.22f
+        val frameAlpha = 0.55f * breathAlpha
+        val frameStroke = Stroke(width = 1.5f)
+        // Top-left corner
+        drawLine(primaryColor.copy(alpha = frameAlpha), Offset(frameL, frameT + bracket), Offset(frameL, frameT), frameStroke.width)
+        drawLine(primaryColor.copy(alpha = frameAlpha), Offset(frameL, frameT), Offset(frameL + bracket, frameT), frameStroke.width)
+        // Top-right corner
+        drawLine(primaryColor.copy(alpha = frameAlpha), Offset(frameR - bracket, frameT), Offset(frameR, frameT), frameStroke.width)
+        drawLine(primaryColor.copy(alpha = frameAlpha), Offset(frameR, frameT), Offset(frameR, frameT + bracket), frameStroke.width)
+        // Bottom-left corner
+        drawLine(primaryColor.copy(alpha = frameAlpha), Offset(frameL, frameB - bracket), Offset(frameL, frameB), frameStroke.width)
+        drawLine(primaryColor.copy(alpha = frameAlpha), Offset(frameL, frameB), Offset(frameL + bracket, frameB), frameStroke.width)
+        // Bottom-right corner
+        drawLine(primaryColor.copy(alpha = frameAlpha), Offset(frameR - bracket, frameB), Offset(frameR, frameB), frameStroke.width)
+        drawLine(primaryColor.copy(alpha = frameAlpha), Offset(frameR, frameB), Offset(frameR, frameB - bracket), frameStroke.width)
+        // Accent dots at corners
+        listOf(Offset(frameL, frameT), Offset(frameR, frameT), Offset(frameL, frameB), Offset(frameR, frameB)).forEach { corner ->
+            drawCircle(accentColor.copy(alpha = 0.7f * breathAlpha), radius = 2.5f, center = corner)
+        }
+
+        // Name label "S.A.S.H.A." below avatar using nativeCanvas
+        drawContext.canvas.nativeCanvas.apply {
+            val paint = android.graphics.Paint().apply {
+                color = android.graphics.Color.argb(
+                    (255 * breathAlpha * 0.85f).toInt(),
+                    0x00, 0xBF, 0xFF
+                )
+                textSize = baseRadius * 0.16f
+                typeface = android.graphics.Typeface.MONOSPACE
+                textAlign = android.graphics.Paint.Align.CENTER
+                letterSpacing = 0.25f
+            }
+            drawText("S . A . S . H . A .", cx, frameB + baseRadius * 0.25f, paint)
         }
     }
 }

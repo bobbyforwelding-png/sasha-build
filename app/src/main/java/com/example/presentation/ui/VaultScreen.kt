@@ -26,10 +26,22 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.Canvas
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -58,9 +70,11 @@ fun ConsoleScreen(viewModel: VaultViewModel) {
     val darkBg = Color(0xFF0A0A0F)
     val darkSurface = Color(0xFF111118)
     val darkCard = Color(0xFF1A1A24)
+    val liveRed = Color(0xFFFF2D55)
     val listState = rememberLazyListState()
     val context = LocalContext.current
     var isSpeaking by remember { mutableStateOf(false) }
+    var handsFreeEnabled by remember { mutableStateOf(false) }
     var tts by remember { mutableStateOf<android.speech.tts.TextToSpeech?>(null) }
     var ttsReady by remember { mutableStateOf(false) }
 
@@ -87,30 +101,58 @@ fun ConsoleScreen(viewModel: VaultViewModel) {
         onDispose { engine?.stop(); engine?.shutdown() }
     }
 
-    fun speakConsoleResponse() {
-        val lastResponse = viewModel.consoleLog.lastOrNull { !it.startsWith("USER:") } ?: return
-        val clean = lastResponse.removePrefix("SASHA: ").trim()
-        if (clean.isBlank()) return
-        tts?.speak(clean, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "console_utterance")
-        isSpeaking = true
-        tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
-            override fun onStart(id: String?) {}
-            override fun onDone(id: String?) { isSpeaking = false }
-            @Deprecated("Deprecated") override fun onError(id: String?) { isSpeaking = false }
-        })
+    fun launchSpeechInput() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak your command...")
+        }
+        speechLauncher.launch(intent)
     }
 
+    fun speakConsoleResponse(onDoneCallback: (() -> Unit)? = null) {
+        val lastResponse = viewModel.consoleLog.lastOrNull { !it.startsWith("USER:") } ?: return
+        val clean = lastResponse.removePrefix("SASHA: ").trim()
+        if (clean.isBlank()) { onDoneCallback?.invoke(); return }
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
+            override fun onStart(id: String?) {}
+            override fun onDone(id: String?) {
+                handler.post {
+                    isSpeaking = false
+                    viewModel.isSpeaking = false
+                    onDoneCallback?.invoke()
+                }
+            }
+            @Deprecated("Deprecated") override fun onError(id: String?) {
+                handler.post {
+                    isSpeaking = false
+                    viewModel.isSpeaking = false
+                    onDoneCallback?.invoke()
+                }
+            }
+        })
+        tts?.speak(clean, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "console_utterance")
+        isSpeaking = true
+        viewModel.isSpeaking = true
+    }
+
+    // Auto-speak + hands-free loop: trigger after each new SASHA response
     LaunchedEffect(viewModel.consoleLog.size) {
         if (viewModel.consoleLog.isNotEmpty()) {
             listState.animateScrollToItem(viewModel.consoleLog.size - 1)
+            if (handsFreeEnabled && viewModel.consoleLog.last().startsWith("SASHA:")) {
+                speakConsoleResponse {
+                    if (handsFreeEnabled) launchSpeechInput()
+                }
+            }
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(darkBg).padding(8.dp)) {
+    Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
         LazyColumn(
             state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth()
-                .background(darkSurface, RoundedCornerShape(8.dp))
+                .background(darkSurface.copy(alpha = 0.85f), RoundedCornerShape(8.dp))
                 .border(1.dp, neonCyan.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
                 .padding(12.dp)
         ) {
@@ -135,16 +177,65 @@ fun ConsoleScreen(viewModel: VaultViewModel) {
                 }
             }
         }
-        Spacer(modifier = Modifier.height(8.dp))
+
+        // GO LIVE button row
+        Spacer(modifier = Modifier.height(6.dp))
+        val screenShareActive = com.example.service.ScreenShareService.isActive
+        Button(
+            onClick = {
+                if (screenShareActive) {
+                    context.startService(
+                        Intent(context, com.example.service.ScreenShareService::class.java).apply {
+                            action = com.example.service.ScreenShareService.ACTION_STOP
+                        }
+                    )
+                } else {
+                    viewModel.requestScreenShare()
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(36.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (screenShareActive) Color(0xFF1A1A24) else liveRed.copy(alpha = 0.15f)
+            ),
+            shape = RoundedCornerShape(8.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, liveRed.copy(alpha = if (screenShareActive) 1f else 0.5f))
+        ) {
+            Box(modifier = Modifier.size(8.dp).background(liveRed, RoundedCornerShape(50)))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                if (screenShareActive) "STOP SCREEN MONITOR" else "🔴 GO LIVE — START SCREEN MONITOR",
+                color = liveRed,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 10.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            // HANDS FREE toggle
+            val handsFreeColor = if (handsFreeEnabled) Color(0xFF00FF66) else Color(0xFF444455)
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(handsFreeColor.copy(alpha = 0.15f))
+                    .border(1.dp, handsFreeColor, RoundedCornerShape(8.dp))
+                    .clickable { handsFreeEnabled = !handsFreeEnabled }
+                    .padding(horizontal = 8.dp, vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    if (handsFreeEnabled) "HF ON" else "HF OFF",
+                    color = handsFreeColor,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 9.sp
+                )
+            }
+            Spacer(modifier = Modifier.width(4.dp))
+
             IconButton(
-                onClick = {
-                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                        putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak your command...")
-                    }
-                    speechLauncher.launch(intent)
-                },
+                onClick = { launchSpeechInput() },
                 modifier = Modifier.padding(end = 4.dp).background(Color(0xFF8B5CF6), RoundedCornerShape(8.dp))
             ) {
                 Icon(Icons.Filled.Mic, contentDescription = "Voice Input", tint = Color.White, modifier = Modifier.size(20.dp))
@@ -330,8 +421,8 @@ fun ProjectsScreen(viewModel: VaultViewModel) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(darkBg).padding(8.dp)) {
-        Row(modifier = Modifier.fillMaxWidth().background(darkSurface, RoundedCornerShape(8.dp)).padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+    Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().background(darkSurface.copy(alpha = 0.85f), RoundedCornerShape(8.dp)).padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
             listOf("AUTOMOTIVE", "FABRICATION", "CODING", "PERSONAL").forEach { cat ->
                 Text(cat, color = neonCyan.copy(alpha = 0.6f), fontWeight = FontWeight.Bold, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
             }
@@ -401,16 +492,18 @@ fun VaultChatTerminal(viewModel: VaultViewModel, uiState: VaultUiState) {
                         "FILES" -> IntelTab(viewModel)
                         "CODEX" -> PrivateCodexEditor(viewModel)
                         "PROJECTS" -> ProjectsScreen(viewModel)
+                        "GO LIVE" -> GoLiveScreen(viewModel)
                     }
                 }
             }
         }
 
-        Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             VaultButton("CHAT", active = (activeVaultTab == "CHAT"), color = personaColor) { activeVaultTab = "CHAT" }
             VaultButton("FILES", active = (activeVaultTab == "FILES"), color = personaColor) { activeVaultTab = "FILES" }
             VaultButton("CODEX", active = (activeVaultTab == "CODEX"), color = personaColor) { activeVaultTab = "CODEX" }
             VaultButton("PROJECTS", active = (activeVaultTab == "PROJECTS"), color = personaColor) { activeVaultTab = "PROJECTS" }
+            VaultButton("GO LIVE", active = (activeVaultTab == "GO LIVE"), color = Color(0xFFFF2D55)) { activeVaultTab = "GO LIVE" }
         }
     }
 }
@@ -550,7 +643,8 @@ fun VaultUnrestrictedChat(viewModel: VaultViewModel) {
                                 mp.prepare()
                                 mp.start()
                                 isSpeaking = true
-                                mp.setOnCompletionListener { it.release(); temp.delete(); isSpeaking = false }
+                                viewModel.isSpeaking = true
+                                mp.setOnCompletionListener { it.release(); temp.delete(); isSpeaking = false; viewModel.isSpeaking = false }
                                 mediaPlayer = mp
                             }
                             served = true
@@ -564,11 +658,12 @@ fun VaultUnrestrictedChat(viewModel: VaultViewModel) {
                     tts?.let { engine ->
                         engine.speak(cleanText, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "sasha_utterance")
                         isSpeaking = true
+                        viewModel.isSpeaking = true
                         engine.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
                             override fun onStart(utteranceId: String?) {}
-                            override fun onDone(utteranceId: String?) { isSpeaking = false }
+                            override fun onDone(utteranceId: String?) { isSpeaking = false; viewModel.isSpeaking = false }
                             @Deprecated("Deprecated")
-                            override fun onError(utteranceId: String?) { isSpeaking = false }
+                            override fun onError(utteranceId: String?) { isSpeaking = false; viewModel.isSpeaking = false }
                         })
                     } ?: run { isSpeaking = false }
                 }
@@ -594,6 +689,45 @@ fun VaultUnrestrictedChat(viewModel: VaultViewModel) {
                 Icon(Icons.Filled.Security, contentDescription = null, tint = Color(0xFF8B5CF6))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("VAULT: UNRESTRICTED", style = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold), color = Color(0xFF8B5CF6))
+                Spacer(modifier = Modifier.weight(1f))
+                // Screen Monitor button pinned in vault header
+                val vaultScreenShareActive = com.example.service.ScreenShareService.isActive
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (vaultScreenShareActive) Color(0xFF1A1A24) else Color(0xFFFF2D55).copy(alpha = 0.15f))
+                        .border(1.dp, Color(0xFFFF2D55).copy(alpha = if (vaultScreenShareActive) 1f else 0.5f), RoundedCornerShape(6.dp))
+                        .clickable {
+                            if (vaultScreenShareActive) {
+                                context.startService(
+                                    Intent(context, com.example.service.ScreenShareService::class.java).apply {
+                                        action = com.example.service.ScreenShareService.ACTION_STOP
+                                    }
+                                )
+                            } else {
+                                viewModel.requestScreenShare()
+                            }
+                        }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            if (vaultScreenShareActive) Icons.Filled.StopCircle else Icons.Filled.Visibility,
+                            contentDescription = null,
+                            tint = Color(0xFFFF2D55),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            if (vaultScreenShareActive) "STOP" else "SCREEN",
+                            color = Color(0xFFFF2D55),
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 9.sp
+                        )
+                    }
+                }
             }
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -735,7 +869,178 @@ fun VaultUnrestrictedChat(viewModel: VaultViewModel) {
 }
 
 @Composable
-fun PrivateCodexEditor(viewModel: VaultViewModel) {
+fun GoLiveScreen(viewModel: VaultViewModel) {
+    val context = LocalContext.current
+    val liveRed = Color(0xFFFF2D55)
+    val darkBg = Color(0xFF0A0A0F)
+    val darkCard = Color(0xFF1A1A24)
+
+    data class LivePlatform(val name: String, val color: Color, val packageName: String, val fallbackUrl: String)
+
+    val platforms = listOf(
+        LivePlatform("YouTube Live", Color(0xFFFF0000), "com.google.android.youtube", "https://www.youtube.com/livestreaming"),
+        LivePlatform("Facebook Live", Color(0xFF1877F2), "com.facebook.katana", "https://www.facebook.com/live/producer"),
+        LivePlatform("Instagram Live", Color(0xFFE1306C), "com.instagram.android", "https://www.instagram.com/"),
+        LivePlatform("TikTok Live", Color(0xFF00F2EA), "com.zhiliaoapp.musically", "https://www.tiktok.com/live"),
+        LivePlatform("Twitch", Color(0xFF9146FF), "tv.twitch.android.app", "https://www.twitch.tv/broadcast/dashboard"),
+        LivePlatform("X / Twitter", Color(0xFF1DA1F2), "com.twitter.android", "https://twitter.com/i/broadcasts")
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(darkBg)
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        // Header
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 16.dp)) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .background(liveRed, shape = RoundedCornerShape(50))
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                "GO LIVE",
+                color = liveRed,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                "SELECT PLATFORM",
+                color = Color.White.copy(alpha = 0.4f),
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp
+            )
+        }
+
+        Text(
+            "TAP TO LAUNCH YOUR STREAM",
+            color = Color.White.copy(alpha = 0.3f),
+            fontFamily = FontFamily.Monospace,
+            fontSize = 10.sp,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+
+        // Platform grid — two columns
+        platforms.chunked(2).forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                row.forEach { platform ->
+                    Card(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(88.dp)
+                            .clickable {
+                                val pm = context.packageManager
+                                val launchIntent = pm.getLaunchIntentForPackage(platform.packageName)
+                                if (launchIntent != null) {
+                                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    context.startActivity(launchIntent)
+                                } else {
+                                    val browserIntent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(platform.fallbackUrl))
+                                    browserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    context.startActivity(browserIntent)
+                                }
+                            }
+                            .border(1.dp, platform.color.copy(alpha = 0.5f), RoundedCornerShape(10.dp)),
+                        colors = CardDefaults.cardColors(containerColor = darkCard),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(12.dp),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                Icons.Filled.Videocam,
+                                contentDescription = null,
+                                tint = platform.color,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                platform.name,
+                                color = platform.color,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+                // Fill empty slot if odd number
+                if (row.size == 1) Spacer(modifier = Modifier.weight(1f))
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Screen share section
+        Text(
+            "SASHA SCREEN MONITOR",
+            color = Color(0xFF00E5FF),
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        Text(
+            "Let Sasha watch your screen during the stream to provide real-time advice.",
+            color = Color.White.copy(alpha = 0.5f),
+            fontFamily = FontFamily.Monospace,
+            fontSize = 10.sp,
+            lineHeight = 14.sp,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+
+        val screenShareActive = com.example.service.ScreenShareService.isActive
+        Button(
+            onClick = {
+                if (screenShareActive) {
+                    context.startService(
+                        Intent(context, com.example.service.ScreenShareService::class.java).apply {
+                            action = com.example.service.ScreenShareService.ACTION_STOP
+                        }
+                    )
+                } else {
+                    viewModel.requestScreenShare()
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (screenShareActive) Color(0xFF1A1A24) else Color(0xFF00E5FF).copy(alpha = 0.15f)
+            ),
+            shape = RoundedCornerShape(8.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, if (screenShareActive) liveRed else Color(0xFF00E5FF).copy(alpha = 0.5f))
+        ) {
+            Icon(
+                if (screenShareActive) Icons.Filled.StopCircle else Icons.Filled.Visibility,
+                contentDescription = null,
+                tint = if (screenShareActive) liveRed else Color(0xFF00E5FF),
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                if (screenShareActive) "STOP SCREEN MONITOR" else "START SCREEN MONITOR",
+                color = if (screenShareActive) liveRed else Color(0xFF00E5FF),
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp
+            )
+        }
+    }
+}
+
+@Composable
     val neonBlue = Color(0xFF00E5FF)
     val languages = listOf("Kotlin", "Python", "Java", "JavaScript", "Compose UI", "XML", "Shell", "SQL")
     var selectedLanguage by remember { mutableStateOf("Kotlin") }
@@ -855,16 +1160,103 @@ fun getWeldSettings(metal: String, thick: String, process: String): WeldSettings
     }
 }
 
-@Composable
-fun WatermarkBackground() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Icon(
-            imageVector = Icons.Filled.Build,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.03f),
-            modifier = Modifier.size(240.dp)
+// ─── Brushed gunmetal border ────────────────────────────────────────────────
+
+fun Modifier.gunmetalBorder(borderWidth: Dp = 4.dp, cornerRadius: Dp = 12.dp): Modifier =
+    this.drawBehind {
+        val w = borderWidth.toPx()
+        val half = w / 2f
+        val cr = cornerRadius.toPx()
+        val brush = Brush.linearGradient(
+            colorStops = arrayOf(
+                0.00f to Color(0xFF7A8A9E),
+                0.10f to Color(0xFF2B333E),
+                0.22f to Color(0xFF58697A),
+                0.35f to Color(0xFF1A2028),
+                0.50f to Color(0xFF3C4C5C),
+                0.65f to Color(0xFF1A2028),
+                0.78f to Color(0xFF58697A),
+                0.90f to Color(0xFF2B333E),
+                1.00f to Color(0xFF7A8A9E)
+            )
+        )
+        drawRoundRect(
+            brush = brush,
+            topLeft = Offset(half, half),
+            size = Size(size.width - w, size.height - w),
+            cornerRadius = CornerRadius(maxOf(cr - half, 0f)),
+            style = Stroke(width = w)
         )
     }
+
+// ─── Skull path (EvenOdd so eye sockets punch through) ───────────────────────
+
+private fun skullPath(cx: Float, cy: Float, s: Float): Path = Path().apply {
+    fillType = PathFillType.EvenOdd
+    // cranium oval
+    addOval(Rect(cx - s * 0.48f, cy - s * 0.60f, cx + s * 0.48f, cy + s * 0.12f))
+    // cheekbones + jaw
+    moveTo(cx - s * 0.40f, cy - s * 0.04f)
+    lineTo(cx - s * 0.45f, cy + s * 0.44f)
+    lineTo(cx - s * 0.28f, cy + s * 0.52f)
+    lineTo(cx - s * 0.12f, cy + s * 0.52f)
+    lineTo(cx - s * 0.12f, cy + s * 0.38f)
+    lineTo(cx + s * 0.12f, cy + s * 0.38f)
+    lineTo(cx + s * 0.12f, cy + s * 0.52f)
+    lineTo(cx + s * 0.28f, cy + s * 0.52f)
+    lineTo(cx + s * 0.45f, cy + s * 0.44f)
+    lineTo(cx + s * 0.40f, cy - s * 0.04f)
+    close()
+    // left eye socket — EvenOdd punches hole
+    addOval(Rect(cx - s * 0.38f, cy - s * 0.38f, cx - s * 0.08f, cy - s * 0.10f))
+    // right eye socket
+    addOval(Rect(cx + s * 0.08f, cy - s * 0.38f, cx + s * 0.38f, cy - s * 0.10f))
+    // nose hole
+    addOval(Rect(cx - s * 0.10f, cy - s * 0.12f, cx + s * 0.10f, cy + s * 0.04f))
+}
+
+// ─── Flame path ──────────────────────────────────────────────────────────────
+
+private fun flamePath(cx: Float, bottom: Float, h: Float, w: Float): Path = Path().apply {
+    moveTo(cx, bottom)
+    cubicTo(cx - w * 0.55f, bottom - h * 0.25f, cx - w * 0.65f, bottom - h * 0.55f, cx - w * 0.15f, bottom - h * 0.72f)
+    cubicTo(cx - w * 0.30f, bottom - h * 0.55f, cx - w * 0.10f, bottom - h * 0.85f, cx, bottom - h)
+    cubicTo(cx + w * 0.10f, bottom - h * 0.85f, cx + w * 0.30f, bottom - h * 0.55f, cx + w * 0.15f, bottom - h * 0.72f)
+    cubicTo(cx + w * 0.65f, bottom - h * 0.55f, cx + w * 0.55f, bottom - h * 0.25f, cx, bottom)
+    close()
+}
+
+// ─── Flames & skulls watermark ───────────────────────────────────────────────
+
+@Composable
+fun FlamesSkullsWatermark() {
+    val flameColor = Color(0xFFFF6820)
+    val skullColor = Color(0xFFB0B8C8)
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val cols = 3
+        val rows = 5
+        val cellW = size.width / cols
+        val cellH = size.height / rows
+        val iconSize = minOf(cellW, cellH) * 0.38f
+        for (row in 0 until rows) {
+            for (col in 0 until cols) {
+                val cx = cellW * col + cellW * 0.5f
+                val cy = cellH * row + cellH * 0.5f
+                if ((row + col) % 2 == 0) {
+                    val fh = iconSize * 1.4f
+                    val fw = iconSize * 0.9f
+                    drawPath(flamePath(cx, cy + fh * 0.5f, fh, fw), color = flameColor, alpha = 0.07f)
+                } else {
+                    drawPath(skullPath(cx, cy, iconSize), color = skullColor, alpha = 0.06f)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun WatermarkBackground() {
+    FlamesSkullsWatermark()
 }
 
 @Composable
@@ -918,22 +1310,26 @@ fun MainVaultDashboard(
     val darkCard = Color(0xFF1A1A24)
 
     Box(modifier = Modifier.fillMaxSize().background(darkBg)) {
+        FlamesSkullsWatermark()
         Column(modifier = Modifier.fillMaxSize().padding(8.dp).windowInsetsPadding(WindowInsets.safeDrawing)) {
-            // 3D Avatar with glow border
+            // 3D Avatar with thick gunmetal brushed shell
             Box(
                 modifier = Modifier.fillMaxWidth().height(180.dp)
-                    .border(1.dp, neonCyan.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                    .gunmetalBorder(4.dp, 12.dp)
                     .background(darkSurface, RoundedCornerShape(12.dp))
                     .padding(4.dp),
                 contentAlignment = Alignment.Center
             ) {
-                SashaAvatar3D(
-                    isSpeaking = false,
-                    isThinking = viewModel.isLoading,
-                    avatarUrl = viewModel.avatarUrl,
+                SashaHologramAvatar(
+                    state = when {
+                        viewModel.isSpeaking -> AvatarState.SPEAKING
+                        viewModel.isLoading -> AvatarState.THINKING
+                        else -> AvatarState.IDLE
+                    },
                     modifier = Modifier.fillMaxSize(),
-                    primaryColor = neonCyan,
-                    onAvatarUrlChange = { viewModel.saveAvatarUrl(it) }
+                    primaryColor = Color(0xFF00BFFF),
+                    accentColor = Color(0xFF8B5CF6),
+                    glowColor = Color(0xFF00BFFF)
                 )
             }
 
@@ -999,31 +1395,38 @@ fun MainVaultDashboard(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Tab bar with glow indicator
+            // Tab bar with gunmetal shell
             Row(
-                modifier = Modifier.fillMaxWidth().background(darkSurface, RoundedCornerShape(10.dp)).padding(4.dp),
+                modifier = Modifier.fillMaxWidth()
+                    .gunmetalBorder(3.dp, 10.dp)
+                    .background(darkSurface, RoundedCornerShape(10.dp))
+                    .padding(4.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 CyberTab("CONSOLE", activePage == "CONSOLE", neonCyan) { activePage = "CONSOLE" }
                 CyberTab("CODEX", activePage == "CODEX", neonCyan) { activePage = "CODEX" }
                 CyberTab("PROJECTS", activePage == "PROJECTS", neonCyan) { activePage = "PROJECTS" }
                 CyberTab("VAULT", activePage == "VAULT", neonCyan) { activePage = "VAULT" }
+                CyberTab("GO LIVE", activePage == "GO LIVE", Color(0xFFFF2D55)) { activePage = "GO LIVE" }
             }
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Content area
+            // Content area with thick gunmetal shell + flames/skulls watermark
             Box(
                 modifier = Modifier.weight(1f)
-                    .border(1.dp, neonCyan.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                    .gunmetalBorder(4.dp, 12.dp)
                     .background(darkCard, RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .padding(4.dp)
             ) {
+                FlamesSkullsWatermark()
                 when (activePage) {
                     "CONSOLE" -> ConsoleScreen(viewModel)
                     "CODEX" -> CodexScreen(viewModel)
                     "PROJECTS" -> ProjectsScreen(viewModel)
                     "VAULT" -> VaultTerminalScreen(viewModel)
+                    "GO LIVE" -> GoLiveScreen(viewModel)
                 }
             }
         }
@@ -1066,7 +1469,7 @@ fun VaultTerminalScreen(viewModel: VaultViewModel) {
 
     if (!viewModel.isPage4Unlocked) {
         Column(
-            modifier = Modifier.fillMaxSize().background(darkBg).padding(16.dp),
+            modifier = Modifier.fillMaxSize().padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
