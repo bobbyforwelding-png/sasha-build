@@ -70,9 +70,11 @@ fun ConsoleScreen(viewModel: VaultViewModel) {
     val darkBg = Color(0xFF0A0A0F)
     val darkSurface = Color(0xFF111118)
     val darkCard = Color(0xFF1A1A24)
+    val liveRed = Color(0xFFFF2D55)
     val listState = rememberLazyListState()
     val context = LocalContext.current
     var isSpeaking by remember { mutableStateOf(false) }
+    var handsFreeEnabled by remember { mutableStateOf(false) }
     var tts by remember { mutableStateOf<android.speech.tts.TextToSpeech?>(null) }
     var ttsReady by remember { mutableStateOf(false) }
 
@@ -99,22 +101,50 @@ fun ConsoleScreen(viewModel: VaultViewModel) {
         onDispose { engine?.stop(); engine?.shutdown() }
     }
 
-    fun speakConsoleResponse() {
+    fun launchSpeechInput() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak your command...")
+        }
+        speechLauncher.launch(intent)
+    }
+
+    fun speakConsoleResponse(onDoneCallback: (() -> Unit)? = null) {
         val lastResponse = viewModel.consoleLog.lastOrNull { !it.startsWith("USER:") } ?: return
         val clean = lastResponse.removePrefix("SASHA: ").trim()
-        if (clean.isBlank()) return
+        if (clean.isBlank()) { onDoneCallback?.invoke(); return }
         tts?.speak(clean, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "console_utterance")
         isSpeaking = true
+        viewModel.isSpeaking = true
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
         tts?.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
             override fun onStart(id: String?) {}
-            override fun onDone(id: String?) { isSpeaking = false }
-            @Deprecated("Deprecated") override fun onError(id: String?) { isSpeaking = false }
+            override fun onDone(id: String?) {
+                handler.post {
+                    isSpeaking = false
+                    viewModel.isSpeaking = false
+                    onDoneCallback?.invoke()
+                }
+            }
+            @Deprecated("Deprecated") override fun onError(id: String?) {
+                handler.post {
+                    isSpeaking = false
+                    viewModel.isSpeaking = false
+                    onDoneCallback?.invoke()
+                }
+            }
         })
     }
 
+    // Auto-speak + hands-free loop: trigger after each new SASHA response
     LaunchedEffect(viewModel.consoleLog.size) {
         if (viewModel.consoleLog.isNotEmpty()) {
             listState.animateScrollToItem(viewModel.consoleLog.size - 1)
+            if (handsFreeEnabled && viewModel.consoleLog.last().startsWith("SASHA:")) {
+                speakConsoleResponse {
+                    if (handsFreeEnabled) launchSpeechInput()
+                }
+            }
         }
     }
 
@@ -147,16 +177,65 @@ fun ConsoleScreen(viewModel: VaultViewModel) {
                 }
             }
         }
-        Spacer(modifier = Modifier.height(8.dp))
+
+        // GO LIVE button row
+        Spacer(modifier = Modifier.height(6.dp))
+        val screenShareActive = com.example.service.ScreenShareService.isActive
+        Button(
+            onClick = {
+                if (screenShareActive) {
+                    context.startService(
+                        Intent(context, com.example.service.ScreenShareService::class.java).apply {
+                            action = com.example.service.ScreenShareService.ACTION_STOP
+                        }
+                    )
+                } else {
+                    viewModel.requestScreenShare()
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(36.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (screenShareActive) Color(0xFF1A1A24) else liveRed.copy(alpha = 0.15f)
+            ),
+            shape = RoundedCornerShape(8.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, liveRed.copy(alpha = if (screenShareActive) 1f else 0.5f))
+        ) {
+            Box(modifier = Modifier.size(8.dp).background(liveRed, RoundedCornerShape(50)))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                if (screenShareActive) "STOP SCREEN MONITOR" else "🔴 GO LIVE — START SCREEN MONITOR",
+                color = liveRed,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 10.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            // HANDS FREE toggle
+            val handsFreeColor = if (handsFreeEnabled) Color(0xFF00FF66) else Color(0xFF444455)
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(handsFreeColor.copy(alpha = 0.15f))
+                    .border(1.dp, handsFreeColor, RoundedCornerShape(8.dp))
+                    .clickable { handsFreeEnabled = !handsFreeEnabled }
+                    .padding(horizontal = 8.dp, vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    if (handsFreeEnabled) "HF ON" else "HF OFF",
+                    color = handsFreeColor,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 9.sp
+                )
+            }
+            Spacer(modifier = Modifier.width(4.dp))
+
             IconButton(
-                onClick = {
-                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                        putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak your command...")
-                    }
-                    speechLauncher.launch(intent)
-                },
+                onClick = { launchSpeechInput() },
                 modifier = Modifier.padding(end = 4.dp).background(Color(0xFF8B5CF6), RoundedCornerShape(8.dp))
             ) {
                 Icon(Icons.Filled.Mic, contentDescription = "Voice Input", tint = Color.White, modifier = Modifier.size(20.dp))
@@ -564,7 +643,8 @@ fun VaultUnrestrictedChat(viewModel: VaultViewModel) {
                                 mp.prepare()
                                 mp.start()
                                 isSpeaking = true
-                                mp.setOnCompletionListener { it.release(); temp.delete(); isSpeaking = false }
+                                viewModel.isSpeaking = true
+                                mp.setOnCompletionListener { it.release(); temp.delete(); isSpeaking = false; viewModel.isSpeaking = false }
                                 mediaPlayer = mp
                             }
                             served = true
@@ -578,11 +658,12 @@ fun VaultUnrestrictedChat(viewModel: VaultViewModel) {
                     tts?.let { engine ->
                         engine.speak(cleanText, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "sasha_utterance")
                         isSpeaking = true
+                        viewModel.isSpeaking = true
                         engine.setOnUtteranceProgressListener(object : android.speech.tts.UtteranceProgressListener() {
                             override fun onStart(utteranceId: String?) {}
-                            override fun onDone(utteranceId: String?) { isSpeaking = false }
+                            override fun onDone(utteranceId: String?) { isSpeaking = false; viewModel.isSpeaking = false }
                             @Deprecated("Deprecated")
-                            override fun onError(utteranceId: String?) { isSpeaking = false }
+                            override fun onError(utteranceId: String?) { isSpeaking = false; viewModel.isSpeaking = false }
                         })
                     } ?: run { isSpeaking = false }
                 }
@@ -608,6 +689,45 @@ fun VaultUnrestrictedChat(viewModel: VaultViewModel) {
                 Icon(Icons.Filled.Security, contentDescription = null, tint = Color(0xFF8B5CF6))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("VAULT: UNRESTRICTED", style = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold), color = Color(0xFF8B5CF6))
+                Spacer(modifier = Modifier.weight(1f))
+                // Screen Monitor button pinned in vault header
+                val vaultScreenShareActive = com.example.service.ScreenShareService.isActive
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (vaultScreenShareActive) Color(0xFF1A1A24) else Color(0xFFFF2D55).copy(alpha = 0.15f))
+                        .border(1.dp, Color(0xFFFF2D55).copy(alpha = if (vaultScreenShareActive) 1f else 0.5f), RoundedCornerShape(6.dp))
+                        .clickable {
+                            if (vaultScreenShareActive) {
+                                context.startService(
+                                    Intent(context, com.example.service.ScreenShareService::class.java).apply {
+                                        action = com.example.service.ScreenShareService.ACTION_STOP
+                                    }
+                                )
+                            } else {
+                                viewModel.requestScreenShare()
+                            }
+                        }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            if (vaultScreenShareActive) Icons.Filled.StopCircle else Icons.Filled.Visibility,
+                            contentDescription = null,
+                            tint = Color(0xFFFF2D55),
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            if (vaultScreenShareActive) "STOP" else "SCREEN",
+                            color = Color(0xFFFF2D55),
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 9.sp
+                        )
+                    }
+                }
             }
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -1200,13 +1320,16 @@ fun MainVaultDashboard(
                     .padding(4.dp),
                 contentAlignment = Alignment.Center
             ) {
-                SashaAvatar3D(
-                    isSpeaking = false,
-                    isThinking = viewModel.isLoading,
-                    avatarUrl = viewModel.avatarUrl,
+                SashaHologramAvatar(
+                    state = when {
+                        viewModel.isSpeaking -> AvatarState.SPEAKING
+                        viewModel.isLoading -> AvatarState.THINKING
+                        else -> AvatarState.IDLE
+                    },
                     modifier = Modifier.fillMaxSize(),
-                    primaryColor = neonCyan,
-                    onAvatarUrlChange = { viewModel.saveAvatarUrl(it) }
+                    primaryColor = Color(0xFF00BFFF),
+                    accentColor = Color(0xFF8B5CF6),
+                    glowColor = Color(0xFF00BFFF)
                 )
             }
 
@@ -1284,6 +1407,7 @@ fun MainVaultDashboard(
                 CyberTab("CODEX", activePage == "CODEX", neonCyan) { activePage = "CODEX" }
                 CyberTab("PROJECTS", activePage == "PROJECTS", neonCyan) { activePage = "PROJECTS" }
                 CyberTab("VAULT", activePage == "VAULT", neonCyan) { activePage = "VAULT" }
+                CyberTab("GO LIVE", activePage == "GO LIVE", Color(0xFFFF2D55)) { activePage = "GO LIVE" }
             }
 
             Spacer(modifier = Modifier.height(6.dp))
@@ -1302,6 +1426,7 @@ fun MainVaultDashboard(
                     "CODEX" -> CodexScreen(viewModel)
                     "PROJECTS" -> ProjectsScreen(viewModel)
                     "VAULT" -> VaultTerminalScreen(viewModel)
+                    "GO LIVE" -> GoLiveScreen(viewModel)
                 }
             }
         }

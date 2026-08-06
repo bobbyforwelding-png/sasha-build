@@ -83,6 +83,8 @@ class VaultViewModel @Inject constructor(
     var isLoading by mutableStateOf(false)
         private set
 
+    var isSpeaking by mutableStateOf(false)
+
     var avatarUrl by mutableStateOf<String?>(null)
 
     // Conversation memory
