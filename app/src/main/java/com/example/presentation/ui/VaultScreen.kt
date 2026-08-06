@@ -26,10 +26,22 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.Canvas
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -106,11 +118,11 @@ fun ConsoleScreen(viewModel: VaultViewModel) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(darkBg).padding(8.dp)) {
+    Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
         LazyColumn(
             state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth()
-                .background(darkSurface, RoundedCornerShape(8.dp))
+                .background(darkSurface.copy(alpha = 0.85f), RoundedCornerShape(8.dp))
                 .border(1.dp, neonCyan.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
                 .padding(12.dp)
         ) {
@@ -330,8 +342,8 @@ fun ProjectsScreen(viewModel: VaultViewModel) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(darkBg).padding(8.dp)) {
-        Row(modifier = Modifier.fillMaxWidth().background(darkSurface, RoundedCornerShape(8.dp)).padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+    Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().background(darkSurface.copy(alpha = 0.85f), RoundedCornerShape(8.dp)).padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
             listOf("AUTOMOTIVE", "FABRICATION", "CODING", "PERSONAL").forEach { cat ->
                 Text(cat, color = neonCyan.copy(alpha = 0.6f), fontWeight = FontWeight.Bold, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
             }
@@ -1028,16 +1040,103 @@ fun getWeldSettings(metal: String, thick: String, process: String): WeldSettings
     }
 }
 
-@Composable
-fun WatermarkBackground() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Icon(
-            imageVector = Icons.Filled.Build,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.03f),
-            modifier = Modifier.size(240.dp)
+// ─── Brushed gunmetal border ────────────────────────────────────────────────
+
+fun Modifier.gunmetalBorder(borderWidth: Dp = 4.dp, cornerRadius: Dp = 12.dp): Modifier =
+    this.drawBehind {
+        val w = borderWidth.toPx()
+        val half = w / 2f
+        val cr = cornerRadius.toPx()
+        val brush = Brush.linearGradient(
+            colorStops = arrayOf(
+                0.00f to Color(0xFF7A8A9E),
+                0.10f to Color(0xFF2B333E),
+                0.22f to Color(0xFF58697A),
+                0.35f to Color(0xFF1A2028),
+                0.50f to Color(0xFF3C4C5C),
+                0.65f to Color(0xFF1A2028),
+                0.78f to Color(0xFF58697A),
+                0.90f to Color(0xFF2B333E),
+                1.00f to Color(0xFF7A8A9E)
+            )
+        )
+        drawRoundRect(
+            brush = brush,
+            topLeft = Offset(half, half),
+            size = Size(size.width - w, size.height - w),
+            cornerRadius = CornerRadius(maxOf(cr - half, 0f)),
+            style = Stroke(width = w)
         )
     }
+
+// ─── Skull path (EvenOdd so eye sockets punch through) ───────────────────────
+
+private fun skullPath(cx: Float, cy: Float, s: Float): Path = Path().apply {
+    fillType = PathFillType.EvenOdd
+    // cranium oval
+    addOval(Rect(cx - s * 0.48f, cy - s * 0.60f, cx + s * 0.48f, cy + s * 0.12f))
+    // cheekbones + jaw
+    moveTo(cx - s * 0.40f, cy - s * 0.04f)
+    lineTo(cx - s * 0.45f, cy + s * 0.44f)
+    lineTo(cx - s * 0.28f, cy + s * 0.52f)
+    lineTo(cx - s * 0.12f, cy + s * 0.52f)
+    lineTo(cx - s * 0.12f, cy + s * 0.38f)
+    lineTo(cx + s * 0.12f, cy + s * 0.38f)
+    lineTo(cx + s * 0.12f, cy + s * 0.52f)
+    lineTo(cx + s * 0.28f, cy + s * 0.52f)
+    lineTo(cx + s * 0.45f, cy + s * 0.44f)
+    lineTo(cx + s * 0.40f, cy - s * 0.04f)
+    close()
+    // left eye socket — EvenOdd punches hole
+    addOval(Rect(cx - s * 0.38f, cy - s * 0.38f, cx - s * 0.08f, cy - s * 0.10f))
+    // right eye socket
+    addOval(Rect(cx + s * 0.08f, cy - s * 0.38f, cx + s * 0.38f, cy - s * 0.10f))
+    // nose hole
+    addOval(Rect(cx - s * 0.10f, cy - s * 0.12f, cx + s * 0.10f, cy + s * 0.04f))
+}
+
+// ─── Flame path ──────────────────────────────────────────────────────────────
+
+private fun flamePath(cx: Float, bottom: Float, h: Float, w: Float): Path = Path().apply {
+    moveTo(cx, bottom)
+    cubicTo(cx - w * 0.55f, bottom - h * 0.25f, cx - w * 0.65f, bottom - h * 0.55f, cx - w * 0.15f, bottom - h * 0.72f)
+    cubicTo(cx - w * 0.30f, bottom - h * 0.55f, cx - w * 0.10f, bottom - h * 0.85f, cx, bottom - h)
+    cubicTo(cx + w * 0.10f, bottom - h * 0.85f, cx + w * 0.30f, bottom - h * 0.55f, cx + w * 0.15f, bottom - h * 0.72f)
+    cubicTo(cx + w * 0.65f, bottom - h * 0.55f, cx + w * 0.55f, bottom - h * 0.25f, cx, bottom)
+    close()
+}
+
+// ─── Flames & skulls watermark ───────────────────────────────────────────────
+
+@Composable
+fun FlamesSkullsWatermark() {
+    val flameColor = Color(0xFFFF6820)
+    val skullColor = Color(0xFFB0B8C8)
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val cols = 3
+        val rows = 5
+        val cellW = size.width / cols
+        val cellH = size.height / rows
+        val iconSize = minOf(cellW, cellH) * 0.38f
+        for (row in 0 until rows) {
+            for (col in 0 until cols) {
+                val cx = cellW * col + cellW * 0.5f
+                val cy = cellH * row + cellH * 0.5f
+                if ((row + col) % 2 == 0) {
+                    val fh = iconSize * 1.4f
+                    val fw = iconSize * 0.9f
+                    drawPath(flamePath(cx, cy + fh * 0.5f, fh, fw), color = flameColor, alpha = 0.07f)
+                } else {
+                    drawPath(skullPath(cx, cy, iconSize), color = skullColor, alpha = 0.06f)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun WatermarkBackground() {
+    FlamesSkullsWatermark()
 }
 
 @Composable
@@ -1091,11 +1190,12 @@ fun MainVaultDashboard(
     val darkCard = Color(0xFF1A1A24)
 
     Box(modifier = Modifier.fillMaxSize().background(darkBg)) {
+        FlamesSkullsWatermark()
         Column(modifier = Modifier.fillMaxSize().padding(8.dp).windowInsetsPadding(WindowInsets.safeDrawing)) {
-            // 3D Avatar with glow border
+            // 3D Avatar with thick gunmetal brushed shell
             Box(
                 modifier = Modifier.fillMaxWidth().height(180.dp)
-                    .border(1.dp, neonCyan.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                    .gunmetalBorder(4.dp, 12.dp)
                     .background(darkSurface, RoundedCornerShape(12.dp))
                     .padding(4.dp),
                 contentAlignment = Alignment.Center
@@ -1172,9 +1272,12 @@ fun MainVaultDashboard(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Tab bar with glow indicator
+            // Tab bar with gunmetal shell
             Row(
-                modifier = Modifier.fillMaxWidth().background(darkSurface, RoundedCornerShape(10.dp)).padding(4.dp),
+                modifier = Modifier.fillMaxWidth()
+                    .gunmetalBorder(3.dp, 10.dp)
+                    .background(darkSurface, RoundedCornerShape(10.dp))
+                    .padding(4.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 CyberTab("CONSOLE", activePage == "CONSOLE", neonCyan) { activePage = "CONSOLE" }
@@ -1185,13 +1288,15 @@ fun MainVaultDashboard(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Content area
+            // Content area with thick gunmetal shell + flames/skulls watermark
             Box(
                 modifier = Modifier.weight(1f)
-                    .border(1.dp, neonCyan.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                    .gunmetalBorder(4.dp, 12.dp)
                     .background(darkCard, RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .padding(4.dp)
             ) {
+                FlamesSkullsWatermark()
                 when (activePage) {
                     "CONSOLE" -> ConsoleScreen(viewModel)
                     "CODEX" -> CodexScreen(viewModel)
@@ -1239,7 +1344,7 @@ fun VaultTerminalScreen(viewModel: VaultViewModel) {
 
     if (!viewModel.isPage4Unlocked) {
         Column(
-            modifier = Modifier.fillMaxSize().background(darkBg).padding(16.dp),
+            modifier = Modifier.fillMaxSize().padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
