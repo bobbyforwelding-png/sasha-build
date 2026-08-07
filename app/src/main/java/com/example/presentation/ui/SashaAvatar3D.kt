@@ -61,8 +61,10 @@ fun SashaAvatar3D(
                     settings.useWideViewPort = true
                     settings.setSupportZoom(false)
                     settings.mediaPlaybackRequiresUserGesture = false
+                    settings.cacheMode = WebSettings.LOAD_NO_CACHE
                     setBackgroundColor(0x00000000)
                     setLayerType(View.LAYER_TYPE_HARDWARE, null)
+                    clearCache(true)
 
                     webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean = false
@@ -73,7 +75,7 @@ fun SashaAvatar3D(
                         }
                     }
 
-                    loadUrl("file:///android_asset/avatar.html")
+                    loadUrl("file:///android_asset/avatar.html?v=human_v2")
                 }
             },
             update = { webView ->
