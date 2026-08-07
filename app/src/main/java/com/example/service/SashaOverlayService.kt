@@ -101,7 +101,7 @@ class SashaOverlayService : Service() {
                     super.onPageFinished(view, url)
                     loadUrl("javascript:(function(){ if(window.setView) setView('full'); if(window.setWalking) setWalking(true); })()")
                     handler.postDelayed({
-                        loadUrl("javascript:(function(){ if(window.setWalking) setWalking(false); if(window.setState) setState('idle'); })()")
+                        loadUrl("javascript:(function(){ if(window.setWalking) setWalking(false); if(window.setView) setView('face'); if(window.setState) setState('idle'); })()")
                     }, 2200)
                 }
             }
@@ -116,9 +116,9 @@ class SashaOverlayService : Service() {
             else
                 @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
