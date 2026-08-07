@@ -1364,16 +1364,11 @@ fun MainVaultDashboard(
                     .padding(4.dp),
                 contentAlignment = Alignment.Center
             ) {
-                SashaHologramAvatar(
-                    state = when {
-                        viewModel.isSpeaking -> AvatarState.SPEAKING
-                        viewModel.isLoading -> AvatarState.THINKING
-                        else -> AvatarState.IDLE
-                    },
+                SashaAvatar3D(
+                    isSpeaking = viewModel.isSpeaking,
+                    isThinking = viewModel.isLoading,
                     modifier = Modifier.fillMaxSize(),
-                    primaryColor = Color(0xFF00BFFF),
-                    accentColor = Color(0xFF8B5CF6),
-                    glowColor = Color(0xFF00BFFF)
+                    primaryColor = Color(0xFF00BFFF)
                 )
             }
 
