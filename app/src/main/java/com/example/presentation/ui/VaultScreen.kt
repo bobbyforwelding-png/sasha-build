@@ -59,6 +59,7 @@ import com.example.presentation.theme.VibrantBlue
 import com.example.presentation.theme.GunmetalGray
 import com.example.presentation.viewmodel.VaultUiState
 import com.example.presentation.viewmodel.VaultChatMessage
+import com.example.presentation.viewmodel.AvatarAccessMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -1353,6 +1354,14 @@ fun MainVaultDashboard(
     val darkSurface = Color(0xFF111118)
     val darkCard = Color(0xFF1A1A24)
 
+    LaunchedEffect(activePage) {
+        viewModel.onVaultContextChanged(activePage == "VAULT")
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { viewModel.onVaultContextChanged(false) }
+    }
+
     Box(modifier = Modifier.fillMaxSize().background(darkBg)) {
         FlamesSkullsWatermark()
         Column(modifier = Modifier.fillMaxSize().padding(8.dp).windowInsetsPadding(WindowInsets.safeDrawing)) {
@@ -1425,6 +1434,14 @@ fun MainVaultDashboard(
                     color = Color(0xFF555577),
                     fontFamily = FontFamily.Monospace,
                     fontSize = 9.sp
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (viewModel.avatarAccessMode == AvatarAccessMode.VAULT_UNRESTRICTED) "MODE: VAULT UNRESTRICTED" else "MODE: RESTRICTED",
+                    color = if (viewModel.avatarAccessMode == AvatarAccessMode.VAULT_UNRESTRICTED) Color(0xFF22C55E) else Color(0xFFFBBF24),
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 IconButton(onClick = { showSettings = true }, modifier = Modifier.size(28.dp)) {

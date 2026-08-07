@@ -45,6 +45,11 @@ data class VaultChatMessage(
     val imageMime: String? = null
 )
 
+enum class AvatarAccessMode {
+    RESTRICTED,
+    VAULT_UNRESTRICTED
+}
+
 data class VaultUiState(
     val savedPin: String? = null,
     val isUnlocked: Boolean = false,
@@ -79,6 +84,18 @@ class VaultViewModel @Inject constructor(
     var unrestrictedInput by mutableStateOf("")
     var isPage4Unlocked by mutableStateOf(false)
     var unlockPin by mutableStateOf("")
+    var isVaultContextActive by mutableStateOf(false)
+        private set
+
+    val avatarAccessMode: AvatarAccessMode
+        get() = if (_uiState.value.isUnlocked && isPage4Unlocked && isVaultContextActive) {
+            AvatarAccessMode.VAULT_UNRESTRICTED
+        } else {
+            AvatarAccessMode.RESTRICTED
+        }
+
+    val isVaultUnrestrictedActive: Boolean
+        get() = avatarAccessMode == AvatarAccessMode.VAULT_UNRESTRICTED
 
     var isLoading by mutableStateOf(false)
         private set
@@ -368,7 +385,7 @@ class VaultViewModel @Inject constructor(
                     for (cat in listOf("HARM_CATEGORY_HARASSMENT", "HARM_CATEGORY_HATE_SPEECH", "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_DANGEROUS_CONTENT")) {
                         put(org.json.JSONObject().apply {
                             put("category", cat)
-                            put("threshold", "BLOCK_NONE")
+                            put("threshold", "BLOCK_ONLY_HIGH")
                         })
                     }
                 })
@@ -448,7 +465,7 @@ class VaultViewModel @Inject constructor(
             for ((funcName, funcArgs) in functionCalls) {
                 val argsMap = mutableMapOf<String, String>()
                 for (key in funcArgs.keys()) argsMap[key] = funcArgs.optString(key, "")
-                val result = executeFunctionCall(funcName, argsMap)
+                val result = executeFunctionCall(funcName, argsMap, allowUnrestrictedTools = false)
                 functionResponses.put(org.json.JSONObject().apply {
                     put("functionResponse", org.json.JSONObject().apply {
                         put("name", funcName)
@@ -556,6 +573,9 @@ class VaultViewModel @Inject constructor(
     private val vaultChatHistory = org.json.JSONArray()
 
     private suspend fun sendVaultMessage(command: String, imageBase64: String? = null, imageMime: String? = null): VaultChatMessage = withContext(Dispatchers.IO) {
+        if (!isVaultUnrestrictedActive) {
+            return@withContext VaultChatMessage("SASHA: Vault unrestricted mode is offline. Unlock Vault and stay in Vault tab to use this channel.")
+        }
         val myApiKey = decodeKey()
 
         val model = "gemini-2.5-flash"
@@ -700,7 +720,7 @@ class VaultViewModel @Inject constructor(
                     for (key in funcArgs.keys()) {
                         argsMap[key] = funcArgs.optString(key, "")
                     }
-                    val result = executeFunctionCall(funcName, argsMap)
+                    val result = executeFunctionCall(funcName, argsMap, allowUnrestrictedTools = true)
                     if (funcName == "generate_image" && result.containsKey("_imageBase64")) {
                         lastGeneratedImageBase64 = result["_imageBase64"]
                         lastGeneratedImageMime = result["_imageMime"]
@@ -794,9 +814,34 @@ class VaultViewModel @Inject constructor(
         return ""
     }
 
-    private suspend fun executeFunctionCall(name: String, args: Map<String, String>): Map<String, String> {
+    private val restrictedBlockedTools = setOf(
+        "launch_app",
+        "make_call",
+        "send_sms",
+        "execute_shell_command",
+        "write_file",
+        "send_email",
+        "search_contacts",
+        "generate_image",
+        "generate_video",
+        "screenshot",
+        "get_call_log",
+        "get_sms_log",
+        "start_screen_share",
+        "stop_screen_share",
+        "get_screen_content"
+    )
+
+    private suspend fun executeFunctionCall(
+        name: String,
+        args: Map<String, String>,
+        allowUnrestrictedTools: Boolean
+    ): Map<String, String> {
         return withContext(Dispatchers.IO) {
             try {
+                if (!allowUnrestrictedTools && name in restrictedBlockedTools) {
+                    return@withContext mapOf("error" to "Tool '$name' is restricted outside unlocked Vault mode.")
+                }
                 when (name) {
                     "launch_app" -> launchApp(args["app_name_or_package"] ?: "")
                     "get_installed_apps" -> getInstalledApps()
@@ -1253,6 +1298,14 @@ GENERATE THIS VIDEO using the link below.
         pendingScreenShareRequest = false
     }
 
+    fun onVaultContextChanged(isActive: Boolean) {
+        val wasUnrestricted = isVaultUnrestrictedActive
+        isVaultContextActive = isActive
+        if (wasUnrestricted && !isVaultUnrestrictedActive) {
+            clearVaultUnrestrictedContext()
+        }
+    }
+
     fun processConsoleCommand() {
         if (consoleInput.isNotBlank()) {
             val command = consoleInput
@@ -1279,6 +1332,10 @@ GENERATE THIS VIDEO using the link below.
 
     fun processUnrestrictedCommand(input: String = unrestrictedInput, imageBase64: String? = null, imageMime: String? = null) {
         if (input.isBlank()) return
+        if (!isVaultUnrestrictedActive) {
+            unrestrictedLog.add(VaultChatMessage("SASHA: Restricted mode active. Enter unlocked Vault and stay in Vault tab for unrestricted chat."))
+            return
+        }
         unrestrictedInput = ""
         unrestrictedLog.add(VaultChatMessage("USER: $input"))
         isLoading = true
@@ -1474,7 +1531,9 @@ GENERATE THIS VIDEO using the link below.
         if (unlockPin.trim() == "0000") {
             isPage4Unlocked = true
         } else {
+            isPage4Unlocked = false
             unlockPin = ""
+            clearVaultUnrestrictedContext()
         }
     }
 
@@ -1504,9 +1563,15 @@ GENERATE THIS VIDEO using the link below.
     fun unlock(pin: String) {
         val isValid = _uiState.value.savedPin == pin
         _uiState.update { it.copy(isUnlocked = isValid, loginError = !isValid) }
+        if (!isValid) {
+            isPage4Unlocked = false
+            clearVaultUnrestrictedContext()
+        }
     }
 
     fun lock() {
+        isPage4Unlocked = false
+        clearVaultUnrestrictedContext()
         _uiState.update { it.copy(isUnlocked = false, loginError = false) }
     }
 
@@ -1532,7 +1597,14 @@ GENERATE THIS VIDEO using the link below.
     }
 
     fun forceReset() {
+        isPage4Unlocked = false
+        isVaultContextActive = false
+        clearVaultUnrestrictedContext()
         repository.clearAll()
         _uiState.update { VaultUiState() }
+    }
+
+    private fun clearVaultUnrestrictedContext() {
+        vaultChatHistory.let { for (i in it.length() - 1 downTo 0) it.remove(i) }
     }
 }
