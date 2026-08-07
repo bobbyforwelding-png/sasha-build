@@ -8,10 +8,39 @@
   body { background:#000; overflow:hidden; width:100vw; height:100vh; }
   canvas { display:block; }
   #loading { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:#00bfff; font-family:monospace; font-size:12px; z-index:99; }
+  #mic-ring {
+    display:none;
+    position:fixed;
+    bottom:18%;
+    left:50%;
+    transform:translate(-50%,-50%) scale(1);
+    width:72px; height:72px;
+    border-radius:50%;
+    border:3px solid #00ff88;
+    box-shadow:0 0 18px 6px rgba(0,255,136,0.45);
+    pointer-events:none;
+    z-index:100;
+  }
+  #mic-label {
+    display:none;
+    position:fixed;
+    bottom:calc(18% - 52px);
+    left:50%;
+    transform:translateX(-50%);
+    color:#00ff88;
+    font-family:monospace;
+    font-size:11px;
+    letter-spacing:2px;
+    pointer-events:none;
+    z-index:100;
+    text-shadow:0 0 8px #00ff88;
+  }
 </style>
 </head>
 <body>
 <div id="loading">INITIALIZING...</div>
+<div id="mic-ring"></div>
+<div id="mic-label">LISTENING</div>
 <script src="file:///android_asset/three.min.js"></script>
 <script>
 document.getElementById('loading').style.display='none';
@@ -465,7 +494,13 @@ scene.add(particles);
 
 let state = 'idle';
 let t = 0;
-window.setState = function(s) { state = s; };
+const micRing  = document.getElementById('mic-ring');
+const micLabel = document.getElementById('mic-label');
+window.setState = function(s) {
+    state = s;
+    if (micLabel) micLabel.style.display = (s === 'listening') ? 'block' : 'none';
+    if (micRing  && s !== 'listening') micRing.style.display = 'none';
+};
 
 // View control: 'face' (default, close up) or 'full' (full body, screen height)
 window.setView = function(v) {
@@ -572,8 +607,36 @@ function animate() {
         head.rotation.y = Math.sin(t * 0.6) * 0.12;
         light1.intensity = 1.5 + Math.sin(t * 2) * 0.3;
         wireMat.opacity = 0.15 + Math.sin(t * 1.5) * 0.05;
+    } else if (state === 'listening') {
+        // Listening — eyes glow green, mouth barely open, head tilted attentively
+        mouth.scale.y = 1 + Math.sin(t * 0.8) * 0.12;
+        mouth.scale.x = 1;
+        mouthMat.opacity = 0.35;
+        upperLip.position.y = -0.1;
+        lowerLip.position.y = -0.1;
+
+        leftEye.iris.color.setHex(0x00ff88);
+        rightEye.iris.color.setHex(0x00ff88);
+        leftEye.glow.opacity  = 0.35 + Math.sin(t * 4) * 0.18;
+        rightEye.glow.opacity = 0.35 + Math.sin(t * 4) * 0.18;
+
+        leftBrow.mesh.position.y  = 0.43 + Math.sin(t * 1.5) * 0.01;
+        rightBrow.mesh.position.y = 0.43 - Math.sin(t * 1.5) * 0.01;
+        leftBrow.mesh.rotation.z  = 0.04;
+        rightBrow.mesh.rotation.z = -0.04;
+
+        head.rotation.y = Math.sin(t * 0.4) * 0.06 + 0.06;
+        light1.intensity = 2.0 + Math.sin(t * 5) * 0.5;
+        wireMat.opacity  = 0.22 + Math.sin(t * 3) * 0.08;
+
+        // Pulse the rim light green
+        rim.color.setHex(0x00ff88);
+        rim.intensity = 0.6 + Math.sin(t * 5) * 0.3;
     } else {
         // Idle - subtle breathing, slow blink
+        rim.color.setHex(0x00bfff);
+        rim.intensity = 0.5;
+
         mouth.scale.y = 1 + Math.sin(t * 0.4) * 0.08;
         mouth.scale.x = 1;
         mouthMat.opacity = 0.45;
@@ -598,6 +661,18 @@ function animate() {
         if (blink) {
             leftEye.glow.opacity = 0.05;
             rightEye.glow.opacity = 0.05;
+        }
+    }
+
+    // Update mic-pulse HUD overlay
+    if (micRing) {
+        if (state === 'listening') {
+            const s = 1 + Math.abs(Math.sin(t * 4)) * 0.35;
+            micRing.style.transform = 'translate(-50%,-50%) scale(' + s + ')';
+            micRing.style.opacity   = 0.55 + Math.abs(Math.sin(t * 4)) * 0.45;
+            micRing.style.display   = 'block';
+        } else {
+            micRing.style.display = 'none';
         }
     }
 
