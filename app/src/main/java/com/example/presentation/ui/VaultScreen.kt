@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.example.domain.model.Job
 import com.example.domain.model.WeldSettings
 import com.example.presentation.viewmodel.VaultViewModel
@@ -1040,6 +1041,74 @@ fun GoLiveScreen(viewModel: VaultViewModel) {
     }
 }
 
+// ─── Photos screen ───────────────────────────────────────────────────────────
+
+@Composable
+fun PhotosScreen(viewModel: VaultViewModel) {
+    val photoGold = Color(0xFFFFC107)
+    val darkBg = Color(0xFF0A0A0F)
+    val darkCard = Color(0xFF1A1A24)
+
+    val photos = remember {
+        listOf(
+            "file:///android_asset/photos/photo1.jpg",
+            "file:///android_asset/photos/photo2.jpg",
+            "file:///android_asset/photos/photo3.jpg"
+        )
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(darkBg)
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 16.dp)) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .background(photoGold, shape = RoundedCornerShape(50))
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                "SASHA PHOTOS",
+                color = photoGold,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                "GALLERY",
+                color = Color.White.copy(alpha = 0.4f),
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp
+            )
+        }
+
+        photos.forEach { url ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = darkCard)
+            ) {
+                AsyncImage(
+                    model = url,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.Black)
+                        .aspectRatio(9f / 16f),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                )
+            }
+        }
+    }
+}
+
 // WELD SETTINGS LOOKUP
 fun getWeldSettings(metal: String, thick: String, process: String): WeldSettings {
     val isThin = thick.contains("16")
@@ -1374,6 +1443,7 @@ fun MainVaultDashboard(
                     CyberTab("CONSOLE", activePage == "CONSOLE", neonCyan) { activePage = "CONSOLE" }
                     CyberTab("CODEX", activePage == "CODEX", neonCyan) { activePage = "CODEX" }
                     CyberTab("PROJECTS", activePage == "PROJECTS", neonCyan) { activePage = "PROJECTS" }
+                    CyberTab("PHOTOS", activePage == "PHOTOS", Color(0xFFFFC107)) { activePage = "PHOTOS" }
                     CyberTab("VAULT", activePage == "VAULT", neonPurple) { activePage = "VAULT" }
                     CyberTab("GO LIVE", activePage == "GO LIVE", Color(0xFFFF2D55)) { activePage = "GO LIVE" }
                 }
@@ -1393,6 +1463,7 @@ fun MainVaultDashboard(
                         "CONSOLE" -> ConsoleScreen(viewModel)
                         "CODEX" -> CodexScreen(viewModel)
                         "PROJECTS" -> ProjectsScreen(viewModel)
+                        "PHOTOS" -> PhotosScreen(viewModel)
                         "VAULT" -> VaultTerminalScreen(viewModel)
                         "GO LIVE" -> GoLiveScreen(viewModel)
                     }
