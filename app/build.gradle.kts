@@ -21,8 +21,8 @@ android {
         applicationId = "com.aistudio.sasha.v4"
         minSdkVersion(24)
         targetSdkVersion(34)
-        versionCode = 14
-        versionName = "14.0"
+        versionCode = 20
+        versionName = "20.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "GEMINI_API_KEY", "\"${localProps.getProperty("GEMINI_API_KEY", "")}\"")
