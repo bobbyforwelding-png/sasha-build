@@ -349,8 +349,6 @@ class VaultViewModel @Inject constructor(
     private suspend fun sendMessage(command: String): String = withContext(Dispatchers.IO) {
         val myApiKey = decodeKey()
 
-        val apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$myApiKey"
-
         try {
             consoleChatHistory.put(org.json.JSONObject().apply {
                 put("role", "user")
@@ -378,42 +376,50 @@ class VaultViewModel @Inject constructor(
                 })
             }
 
-            val conn = URL(apiUrl).openConnection() as HttpURLConnection
-            conn.requestMethod = "POST"
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.doOutput = true
-            conn.connectTimeout = 60000
-            conn.readTimeout = 60000
-            conn.outputStream.write(requestBody.toString().toByteArray())
-            conn.outputStream.flush()
-            conn.outputStream.close()
-
-            var responseCode = conn.responseCode
+            val fallbackModels = listOf(
+                "gemini-2.5-flash",
+                "gemini-2.0-flash",
+                "gemini-1.5-flash"
+            )
+            var responseCode = 0
             var responseBody = ""
+            var succeeded = false
 
-            var retryAttempt = 0
-            while (retryAttempt < 3 && responseCode !in 200..299) {
-                retryAttempt++
-                Thread.sleep(retryAttempt * 2000L)
-                val retryConn = URL(apiUrl).openConnection() as HttpURLConnection
-                retryConn.requestMethod = "POST"
-                retryConn.setRequestProperty("Content-Type", "application/json")
-                retryConn.doOutput = true
-                retryConn.connectTimeout = 60000
-                retryConn.readTimeout = 60000
-                retryConn.outputStream.write(requestBody.toString().toByteArray())
-                retryConn.outputStream.flush()
-                retryConn.outputStream.close()
-                responseCode = retryConn.responseCode
-                if (responseCode in 200..299) responseBody = retryConn.inputStream.bufferedReader().readText()
-                retryConn.disconnect()
+            for (model in fallbackModels) {
+                val tryUrl = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$myApiKey"
+                var attempt = 0
+                while (attempt < 4 && !succeeded) {
+                    attempt++
+                    if (attempt > 1) Thread.sleep(attempt * 1800L)
+                    try {
+                        val c2 = URL(tryUrl).openConnection() as HttpURLConnection
+                        c2.requestMethod = "POST"
+                        c2.setRequestProperty("Content-Type", "application/json")
+                        c2.doOutput = true
+                        c2.connectTimeout = 60000
+                        c2.readTimeout = 60000
+                        c2.outputStream.write(requestBody.toString().toByteArray())
+                        c2.outputStream.flush()
+                        c2.outputStream.close()
+                        responseCode = c2.responseCode
+                        if (responseCode in 200..299) {
+                            responseBody = c2.inputStream.bufferedReader().readText()
+                            succeeded = true
+                        } else if (responseCode !in listOf(429, 500, 503)) {
+                            // Non-retryable error — bail from inner loop
+                            attempt = 99
+                        }
+                        c2.disconnect()
+                    } catch (_: Exception) { /* network glitch, retry */ }
+                }
+                if (succeeded) break
+                // 429/503 on this model → try next fallback immediately
             }
 
-            if (responseCode !in 200..299) {
+            if (!succeeded) {
                 if (consoleChatHistory.length() > 0) consoleChatHistory.remove(consoleChatHistory.length() - 1)
-                return@withContext "SASHA: Google's servers are slammed. Try again in a few seconds."
+                return@withContext "SASHA: Network issue ($responseCode) — check your connection and try again."
             }
-            if (responseBody.isBlank()) responseBody = conn.inputStream.bufferedReader().readText()
 
             val json = org.json.JSONObject(responseBody)
             val candidates = json.optJSONArray("candidates")
@@ -562,9 +568,6 @@ class VaultViewModel @Inject constructor(
     private suspend fun sendVaultMessage(command: String, imageBase64: String? = null, imageMime: String? = null): VaultChatMessage = withContext(Dispatchers.IO) {
         val myApiKey = decodeKey()
 
-        val model = "gemini-2.5-flash"
-        val apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$myApiKey"
-
         var lastGeneratedImageBase64: String? = null
         var lastGeneratedImageMime: String? = null
 
@@ -611,54 +614,46 @@ class VaultViewModel @Inject constructor(
                     })
                 }
 
-                val conn = URL(apiUrl).openConnection() as HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.setRequestProperty("Content-Type", "application/json")
-                conn.doOutput = true
-                conn.connectTimeout = 60000
-                conn.readTimeout = 60000
-                conn.outputStream.write(requestBody.toString().toByteArray())
-                conn.outputStream.flush()
-                conn.outputStream.close()
-
-                var responseCode = conn.responseCode
+                val vaultFallbackModels = listOf("gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash")
+                var responseCode = 0
                 var responseBody = ""
-                var retryAttempt = 0
-                val maxRetries = 3
+                var roundSucceeded = false
 
-                while (retryAttempt < maxRetries && responseCode !in 200..299) {
-                    retryAttempt++
-                    val backoff = retryAttempt * 2000L
-                    Thread.sleep(backoff)
-                    val retryConn = URL(apiUrl).openConnection() as HttpURLConnection
-                    retryConn.requestMethod = "POST"
-                    retryConn.setRequestProperty("Content-Type", "application/json")
-                    retryConn.doOutput = true
-                    retryConn.connectTimeout = 60000
-                    retryConn.readTimeout = 60000
-                    retryConn.outputStream.write(requestBody.toString().toByteArray())
-                    retryConn.outputStream.flush()
-                    retryConn.outputStream.close()
-                    responseCode = retryConn.responseCode
-                    if (responseCode in 200..299) {
-                        responseBody = retryConn.inputStream.bufferedReader().readText()
+                for (tryModel in vaultFallbackModels) {
+                    val tryUrl = "https://generativelanguage.googleapis.com/v1beta/models/$tryModel:generateContent?key=$myApiKey"
+                    var attempt = 0
+                    while (attempt < 4 && !roundSucceeded) {
+                        attempt++
+                        if (attempt > 1) Thread.sleep(attempt * 1800L)
+                        try {
+                            val rc = URL(tryUrl).openConnection() as HttpURLConnection
+                            rc.requestMethod = "POST"
+                            rc.setRequestProperty("Content-Type", "application/json")
+                            rc.doOutput = true
+                            rc.connectTimeout = 60000
+                            rc.readTimeout = 60000
+                            rc.outputStream.write(requestBody.toString().toByteArray())
+                            rc.outputStream.flush()
+                            rc.outputStream.close()
+                            responseCode = rc.responseCode
+                            if (responseCode in 200..299) {
+                                responseBody = rc.inputStream.bufferedReader().readText()
+                                roundSucceeded = true
+                            } else if (responseCode !in listOf(429, 500, 503)) {
+                                attempt = 99
+                            }
+                            rc.disconnect()
+                        } catch (_: Exception) { /* retry */ }
                     }
-                    retryConn.disconnect()
+                    if (roundSucceeded) break
                 }
 
-                if (responseCode !in 200..299) {
+                if (!roundSucceeded) {
                     if (vaultChatHistory.length() > 0) vaultChatHistory.remove(vaultChatHistory.length() - 1)
-                    if (responseBody.isBlank()) {
-                        responseBody = conn.errorStream?.bufferedReader()?.readText() ?: "HTTP $responseCode"
-                    }
-                    val isOverloaded = responseCode == 503 || responseCode == 429
-                    val msg = if (isOverloaded) "Baby, Google's servers are slammed right now. Give me 10 seconds and try again." else "API error ($responseCode): ${responseBody.take(200)}"
-                    return@withContext VaultChatMessage("SASHA: $msg")
+                    return@withContext VaultChatMessage("SASHA: Network issue ($responseCode) — check your connection and try again.")
                 }
 
-                if (responseBody.isBlank()) {
-                    responseBody = conn.inputStream.bufferedReader().readText()
-                }
+
 
                 val json = org.json.JSONObject(responseBody)
                 val candidates = json.optJSONArray("candidates")

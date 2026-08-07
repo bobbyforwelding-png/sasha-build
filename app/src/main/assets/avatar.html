@@ -6,834 +6,781 @@
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body { background:transparent; overflow:hidden; width:100vw; height:100vh; }
-  canvas { display:block; background:transparent; }
+  canvas { display:block; }
 </style>
 </head>
 <body>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
-/* ================================================================
-   SASHA — Photorealistic 3-D Portrait
-   Approach: canvas-generated textures on high-poly geometry to
-   simulate a real human face with proper skin, eyes, lips, hair.
-   No blob primitives — everything uses realistic proportions and
-   painted texture maps.
-================================================================ */
+/* ============================================================
+   S.A.S.H.A. — Photorealistic 2D Canvas Portrait
+   No blob. No 3D primitives. Pure painted anatomy.
+   Dark-skinned woman, sharp features, glossy dark hair,
+   burgundy lips, dark brown eyes. Portrait framing.
+   Animated: breathe · blink · speak · think.
+============================================================ */
 
-const W = window.innerWidth, H = window.innerHeight;
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(24, W/H, 0.05, 80);
-camera.position.set(0, 0.08, 1.32);
-camera.lookAt(0, 0.04, 0);
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+let W, H, CX, CY, SCALE;
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-renderer.setSize(W, H);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setClearColor(0x000000, 0);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-document.body.appendChild(renderer.domElement);
-
-/* ── LIGHTING ── */
-// Strong warm key from top-left front — classic portrait lighting
-const keyLight = new THREE.DirectionalLight(0xfff5e8, 2.4);
-keyLight.position.set(-0.6, 1.4, 2.2);
-keyLight.castShadow = true;
-scene.add(keyLight);
-
-// Soft fill from right
-const fillLight = new THREE.DirectionalLight(0xd4e8ff, 0.7);
-fillLight.position.set(1.4, 0.2, 1.8);
-scene.add(fillLight);
-
-// Rim / back light — warm separation from background
-const rimLight = new THREE.PointLight(0x8B5CF6, 1.1, 8);
-rimLight.position.set(0.0, 0.5, -2.0);
-scene.add(rimLight);
-
-// Subtle under-chin bounce
-const bounceLight = new THREE.PointLight(0xffe0b0, 0.35, 4);
-bounceLight.position.set(0, -0.4, 1.2);
-scene.add(bounceLight);
-
-// Ambient
-scene.add(new THREE.AmbientLight(0xfff0e0, 0.55));
-
-/* ================================================================
-   TEXTURE FACTORIES — all painted on <canvas> for zero network calls
-================================================================ */
-
-function makeSkinTexture(size) {
-    const c = document.createElement('canvas');
-    c.width = c.height = size;
-    const ctx = c.getContext('2d');
-
-    // Base gradient — warm olive-tan complexion
-    const bg = ctx.createRadialGradient(size/2, size*0.45, size*0.05, size/2, size*0.45, size*0.6);
-    bg.addColorStop(0,   '#e8a87c');
-    bg.addColorStop(0.35,'#d9956a');
-    bg.addColorStop(0.7, '#c07c55');
-    bg.addColorStop(1.0, '#a86040');
-    ctx.fillStyle = bg;
-    ctx.fillRect(0,0,size,size);
-
-    // Subtle pore noise
-    for (let i = 0; i < size * size * 0.06; i++) {
-        const px = (Math.random() * size)|0;
-        const py = (Math.random() * size)|0;
-        const v  = Math.random() * 18 - 9;
-        ctx.fillStyle = `rgba(${v<0?0:v},${v<0?0:v*0.5},0,0.04)`;
-        ctx.fillRect(px, py, 1, 1);
-    }
-
-    // Cheek flush — rosy warmth
-    const cheekL = ctx.createRadialGradient(size*0.3, size*0.52, 0, size*0.3, size*0.52, size*0.2);
-    cheekL.addColorStop(0, 'rgba(210,90,70,0.13)');
-    cheekL.addColorStop(1, 'rgba(210,90,70,0)');
-    ctx.fillStyle = cheekL; ctx.fillRect(0,0,size,size);
-    const cheekR = ctx.createRadialGradient(size*0.7, size*0.52, 0, size*0.7, size*0.52, size*0.2);
-    cheekR.addColorStop(0, 'rgba(210,90,70,0.13)');
-    cheekR.addColorStop(1, 'rgba(210,90,70,0)');
-    ctx.fillStyle = cheekR; ctx.fillRect(0,0,size,size);
-
-    // Forehead highlight
-    const fhl = ctx.createRadialGradient(size/2, size*0.18, 0, size/2, size*0.18, size*0.28);
-    fhl.addColorStop(0, 'rgba(255,235,210,0.22)');
-    fhl.addColorStop(1, 'rgba(255,235,210,0)');
-    ctx.fillStyle = fhl; ctx.fillRect(0,0,size,size);
-
-    const t = new THREE.CanvasTexture(c);
-    return t;
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  CX = W / 2;
+  CY = H / 2;
+  SCALE = Math.min(W, H) / 420;
 }
+resize();
+window.addEventListener('resize', resize);
 
-function makeFaceDetailTexture(size) {
-    // Normal/detail map — eyebrows, eyelids, lips, nose shading, contour
-    const c = document.createElement('canvas');
-    c.width = c.height = size;
-    const ctx = c.getContext('2d');
-    ctx.clearRect(0, 0, size, size);
-
-    const cx = size / 2;
-
-    // ─── EYEBROWS ───
-    function drawBrow(bx, dir) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(bx - dir*size*0.09, size*0.295);
-        ctx.bezierCurveTo(
-            bx - dir*size*0.04, size*0.270,
-            bx + dir*size*0.04, size*0.268,
-            bx + dir*size*0.09, size*0.285
-        );
-        ctx.lineWidth = size * 0.025;
-        ctx.strokeStyle = '#1e1008';
-        ctx.lineCap = 'round';
-        ctx.stroke();
-        // arch taper — thinner tail
-        ctx.lineWidth = size * 0.012;
-        ctx.globalAlpha = 0.55;
-        ctx.stroke();
-        ctx.restore();
-    }
-    drawBrow(cx - size*0.155, -1);
-    drawBrow(cx + size*0.155,  1);
-
-    // ─── UPPER LASH LINES ───
-    function drawLash(ex) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(ex - size*0.075, size*0.382);
-        ctx.bezierCurveTo(ex, size*0.370, ex + size*0.04, size*0.372, ex + size*0.075, size*0.386);
-        ctx.lineWidth = size * 0.018;
-        ctx.strokeStyle = '#0d0508';
-        ctx.lineCap = 'round';
-        ctx.stroke();
-        ctx.restore();
-    }
-    drawLash(cx - size*0.155);
-    drawLash(cx + size*0.155);
-
-    // ─── EYE SHADOW gradient ───
-    function eyeShadow(ex) {
-        const g = ctx.createRadialGradient(ex, size*0.39, 0, ex, size*0.39, size*0.07);
-        g.addColorStop(0, 'rgba(80,30,60,0.28)');
-        g.addColorStop(1, 'rgba(80,30,60,0)');
-        ctx.fillStyle = g; ctx.fillRect(0,0,size,size);
-    }
-    eyeShadow(cx - size*0.155);
-    eyeShadow(cx + size*0.155);
-
-    // ─── NOSE shading ───
-    // Bridge shadow left
-    const nsL = ctx.createLinearGradient(cx - size*0.04, size*0.45, cx, size*0.45);
-    nsL.addColorStop(0, 'rgba(100,50,20,0.18)');
-    nsL.addColorStop(1, 'rgba(100,50,20,0)');
-    ctx.fillStyle = nsL;
-    ctx.fillRect(0, size*0.38, size, size*0.22);
-    // Bridge shadow right
-    const nsR = ctx.createLinearGradient(cx + size*0.04, size*0.45, cx, size*0.45);
-    nsR.addColorStop(0, 'rgba(100,50,20,0.18)');
-    nsR.addColorStop(1, 'rgba(100,50,20,0)');
-    ctx.fillStyle = nsR;
-    ctx.fillRect(0, size*0.38, size, size*0.22);
-    // Nostril shadows
-    [cx - size*0.055, cx + size*0.055].forEach(nx => {
-        const ng = ctx.createRadialGradient(nx, size*0.598, 0, nx, size*0.598, size*0.04);
-        ng.addColorStop(0, 'rgba(60,25,10,0.45)');
-        ng.addColorStop(1, 'rgba(60,25,10,0)');
-        ctx.fillStyle = ng; ctx.fillRect(0,0,size,size);
-    });
-
-    // ─── LIPS ───
-    ctx.save();
-    // Upper lip
-    ctx.beginPath();
-    ctx.moveTo(cx - size*0.1, size*0.685);
-    ctx.bezierCurveTo(cx - size*0.055, size*0.668, cx - size*0.018, size*0.660, cx, size*0.668);
-    ctx.bezierCurveTo(cx + size*0.018, size*0.660, cx + size*0.055, size*0.668, cx + size*0.1, size*0.685);
-    ctx.bezierCurveTo(cx + size*0.07, size*0.700, cx + size*0.03, size*0.706, cx, size*0.704);
-    ctx.bezierCurveTo(cx - size*0.03, size*0.706, cx - size*0.07, size*0.700, cx - size*0.1, size*0.685);
-    ctx.closePath();
-    const lipGrad = ctx.createLinearGradient(0, size*0.660, 0, size*0.720);
-    lipGrad.addColorStop(0, '#c0454e');
-    lipGrad.addColorStop(0.4, '#a83848');
-    lipGrad.addColorStop(1, '#7a2030');
-    ctx.fillStyle = lipGrad;
-    ctx.fill();
-    // Lip gloss highlight
-    const lipHL = ctx.createLinearGradient(0, size*0.665, 0, size*0.682);
-    lipHL.addColorStop(0, 'rgba(255,200,200,0.4)');
-    lipHL.addColorStop(1, 'rgba(255,200,200,0)');
-    ctx.fillStyle = lipHL;
-    ctx.fill();
-
-    // Lower lip
-    ctx.beginPath();
-    ctx.moveTo(cx - size*0.095, size*0.708);
-    ctx.bezierCurveTo(cx - size*0.06, size*0.710, cx - size*0.02, size*0.714, cx, size*0.714);
-    ctx.bezierCurveTo(cx + size*0.02, size*0.714, cx + size*0.06, size*0.710, cx + size*0.095, size*0.708);
-    ctx.bezierCurveTo(cx + size*0.05, size*0.738, cx + size*0.01, size*0.742, cx, size*0.742);
-    ctx.bezierCurveTo(cx - size*0.01, size*0.742, cx - size*0.05, size*0.738, cx - size*0.095, size*0.708);
-    ctx.closePath();
-    const lipLowGrad = ctx.createLinearGradient(0, size*0.705, 0, size*0.745);
-    lipLowGrad.addColorStop(0, '#b84050');
-    lipLowGrad.addColorStop(0.3, '#9a3040');
-    lipLowGrad.addColorStop(1, '#6a1828');
-    ctx.fillStyle = lipLowGrad;
-    ctx.fill();
-    // Lower lip highlight dome
-    const llHL = ctx.createRadialGradient(cx, size*0.715, 0, cx, size*0.715, size*0.055);
-    llHL.addColorStop(0, 'rgba(255,190,190,0.35)');
-    llHL.addColorStop(1, 'rgba(255,190,190,0)');
-    ctx.fillStyle = llHL; ctx.fillRect(0,0,size,size);
-    ctx.restore();
-
-    // ─── CHIN shadow / jaw definition ───
-    const jawShad = ctx.createLinearGradient(0, size*0.80, 0, size*0.98);
-    jawShad.addColorStop(0, 'rgba(60,25,10,0)');
-    jawShad.addColorStop(1, 'rgba(60,25,10,0.22)');
-    ctx.fillStyle = jawShad; ctx.fillRect(0, size*0.80, size, size*0.20);
-
-    // ─── CONTOURING — temples + cheekbone shadow ───
-    [0.05, 0.95].forEach((fx, i) => {
-        const contour = ctx.createLinearGradient(i===0 ? 0 : size, size*0.40, i===0 ? size*0.25 : size*0.75, size*0.55);
-        contour.addColorStop(0, 'rgba(70,30,10,0.20)');
-        contour.addColorStop(1, 'rgba(70,30,10,0)');
-        ctx.fillStyle = contour; ctx.fillRect(0, size*0.35, size, size*0.35);
-    });
-
-    const t = new THREE.CanvasTexture(c);
-    return t;
-}
-
-function makeIrisTexture(size) {
-    const c = document.createElement('canvas');
-    c.width = c.height = size;
-    const ctx = c.getContext('2d');
-
-    // Iris base — deep dark brown
-    const base = ctx.createRadialGradient(size/2,size/2,0, size/2,size/2,size/2);
-    base.addColorStop(0, '#3a1c08');
-    base.addColorStop(0.55,'#52280e');
-    base.addColorStop(0.80,'#3a1c08');
-    base.addColorStop(1,   '#1a0802');
-    ctx.fillStyle = base;
-    ctx.beginPath(); ctx.arc(size/2,size/2,size/2,0,Math.PI*2); ctx.fill();
-
-    // Iris fibers (radial lines)
-    for (let a = 0; a < 60; a++) {
-        const ang = (a/60) * Math.PI * 2;
-        ctx.save();
-        ctx.translate(size/2, size/2);
-        ctx.rotate(ang);
-        ctx.strokeStyle = `rgba(${100+Math.random()*60},${40+Math.random()*30},${10},${0.12+Math.random()*0.18})`;
-        ctx.lineWidth = 0.8 + Math.random();
-        ctx.beginPath();
-        ctx.moveTo(size*0.14, 0);
-        ctx.lineTo(size*0.46, 0);
-        ctx.stroke();
-        ctx.restore();
-    }
-
-    // Limbal ring — dark edge
-    const limbal = ctx.createRadialGradient(size/2,size/2,size*0.39, size/2,size/2,size/2);
-    limbal.addColorStop(0, 'rgba(0,0,0,0)');
-    limbal.addColorStop(1, 'rgba(0,0,0,0.75)');
-    ctx.fillStyle = limbal;
-    ctx.beginPath(); ctx.arc(size/2,size/2,size/2,0,Math.PI*2); ctx.fill();
-
-    // Pupil
-    const pupilR = size * 0.26;
-    ctx.fillStyle = '#050202';
-    ctx.beginPath(); ctx.arc(size/2,size/2,pupilR,0,Math.PI*2); ctx.fill();
-
-    // Catchlight — two points of life
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
-    ctx.beginPath(); ctx.arc(size*0.37, size*0.36, size*0.07, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.45)';
-    ctx.beginPath(); ctx.arc(size*0.63, size*0.62, size*0.035, 0, Math.PI*2); ctx.fill();
-
-    const t = new THREE.CanvasTexture(c);
-    return t;
-}
-
-function makeHairTexture(size) {
-    const c = document.createElement('canvas');
-    c.width = c.height = size;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = '#1a0d07';
-    ctx.fillRect(0, 0, size, size);
-
-    // Hair strand highlights — dark glossy brunette
-    for (let i = 0; i < 240; i++) {
-        const x = Math.random() * size;
-        const y = Math.random() * size;
-        const len = 18 + Math.random() * 40;
-        const angle = Math.PI/2 + (Math.random()-0.5)*0.4;
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.rotate(angle);
-        const hg = ctx.createLinearGradient(-len/2, 0, len/2, 0);
-        const lv = 20 + Math.random() * 45;
-        hg.addColorStop(0,   'rgba(0,0,0,0)');
-        hg.addColorStop(0.5, `rgba(${lv+30},${lv*0.65},${lv*0.3},0.6)`);
-        hg.addColorStop(1,   'rgba(0,0,0,0)');
-        ctx.strokeStyle = hg;
-        ctx.lineWidth = 0.7 + Math.random() * 1.2;
-        ctx.beginPath(); ctx.moveTo(-len/2, 0); ctx.lineTo(len/2, 0);
-        ctx.stroke();
-        ctx.restore();
-    }
-
-    // Overall sheen gradient
-    const sheen = ctx.createLinearGradient(0,0,size,size*0.6);
-    sheen.addColorStop(0, 'rgba(80,45,20,0.18)');
-    sheen.addColorStop(0.4,'rgba(60,30,10,0.1)');
-    sheen.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = sheen; ctx.fillRect(0,0,size,size);
-
-    const t = new THREE.CanvasTexture(c);
-    return t;
-}
-
-function makeClothingTexture(size) {
-    const c = document.createElement('canvas');
-    c.width = c.height = size;
-    const ctx = c.getContext('2d');
-    const g = ctx.createLinearGradient(0,0,size,size);
-    g.addColorStop(0, '#22122e');
-    g.addColorStop(0.5, '#1a0e24');
-    g.addColorStop(1, '#0f0818');
-    ctx.fillStyle = g; ctx.fillRect(0,0,size,size);
-    // Subtle fabric grain
-    for (let i = 0; i < size * 2; i++) {
-        const x = Math.random() * size;
-        const y = Math.random() * size;
-        ctx.fillStyle = `rgba(139,92,246,${0.02+Math.random()*0.04})`;
-        ctx.fillRect(x, y, 1 + Math.random(), 1 + Math.random());
-    }
-    const t = new THREE.CanvasTexture(c);
-    return t;
-}
-
-/* pre-build all textures */
-const skinTex    = makeSkinTexture(512);
-const detailTex  = makeFaceDetailTexture(512);
-const irisTex    = makeIrisTexture(128);
-const hairTex    = makeHairTexture(256);
-const clothTex   = makeClothingTexture(256);
-
-/* ================================================================
-   MATERIALS
-================================================================ */
-// Skin — MeshPhongMaterial is fast and correct for skin on mobile
-const matSkin = new THREE.MeshPhongMaterial({
-    map:       skinTex,
-    specularMap: skinTex,
-    specular:  new THREE.Color(0xffe4c8),
-    shininess: 22,
-    side:      THREE.FrontSide
-});
-const matSkinSoft = new THREE.MeshPhongMaterial({
-    map:       skinTex,
-    specular:  new THREE.Color(0xffd8b0),
-    shininess: 16,
-    side:      THREE.FrontSide
-});
-const matHair = new THREE.MeshPhongMaterial({
-    map:       hairTex,
-    specular:  new THREE.Color(0x7a5530),
-    shininess: 55,
-    side:      THREE.DoubleSide
-});
-const matIris = new THREE.MeshPhongMaterial({
-    map:       irisTex,
-    specular:  new THREE.Color(0xffffff),
-    shininess: 140
-});
-const matEyeWhite = new THREE.MeshPhongMaterial({
-    color:     0xf2ebe3,
-    specular:  new THREE.Color(0xffffff),
-    shininess: 100
-});
-const matCornea = new THREE.MeshPhongMaterial({
-    color:     0xffffff,
-    transparent: true,
-    opacity:   0.12,
-    specular:  new THREE.Color(0xffffff),
-    shininess: 300
-});
-const matLash = new THREE.MeshBasicMaterial({ color: 0x0d0508 });
-const matCloth = new THREE.MeshPhongMaterial({
-    map:       clothTex,
-    specular:  new THREE.Color(0x8B5CF6),
-    shininess: 35,
-    side:      THREE.DoubleSide
-});
-const matSkinShadow = new THREE.MeshPhongMaterial({
-    color:     0xb06840,
-    specular:  new THREE.Color(0xffd0a0),
-    shininess: 14,
-    side:      THREE.FrontSide
-});
-
-/* ================================================================
-   GEOMETRY HELPERS
-================================================================ */
-function sphere(rx, ry, rz, ws, hs) {
-    const g = new THREE.SphereGeometry(1, ws||32, hs||24);
-    const m = new THREE.Mesh(g, matSkin);
-    m.scale.set(rx, ry, rz);
-    return m;
-}
-function cyl(rt, rb, h, s, mat) {
-    return new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, s||18, 6), mat || matSkinSoft);
-}
-
-/* ================================================================
-   ROOT GROUP
-================================================================ */
-const sasha = new THREE.Group();
-scene.add(sasha);
-
-/* ================================================================
-   HEAD
-   Portrait framing: head fills most of the view.
-   Head centre at y = 0.
-================================================================ */
-const head = new THREE.Group();
-sasha.add(head);
-
-/* -- Cranium (slightly elongated ovoid) -- */
-const cranium = new THREE.Mesh(new THREE.SphereGeometry(0.42, 64, 48), matSkin);
-cranium.scale.set(0.80, 0.96, 0.90);
-cranium.position.set(0, 0.06, 0);
-head.add(cranium);
-
-/* -- Facial plane (forehead + cheekbones protrude slightly forward) -- */
-const facePlane = new THREE.Mesh(new THREE.SphereGeometry(0.36, 48, 36), matSkin);
-facePlane.scale.set(0.78, 0.82, 1.05);
-facePlane.position.set(0, -0.02, 0.06);
-head.add(facePlane);
-
-/* -- Jaw / lower face -- */
-const jaw = new THREE.Mesh(new THREE.SphereGeometry(0.30, 40, 32), matSkin);
-jaw.scale.set(0.70, 0.55, 0.80);
-jaw.position.set(0, -0.26, 0.01);
-head.add(jaw);
-
-/* -- Chin -- */
-const chin = new THREE.Mesh(new THREE.SphereGeometry(0.10, 20, 16), matSkin);
-chin.scale.set(0.75, 0.58, 0.70);
-chin.position.set(0, -0.42, 0.06);
-head.add(chin);
-
-/* -- Cheekbones -- */
-[-1,1].forEach(s => {
-    const ck = new THREE.Mesh(new THREE.SphereGeometry(0.14, 24, 18), matSkin);
-    ck.scale.set(1.0, 0.62, 0.72);
-    ck.position.set(s * 0.27, -0.06, 0.16);
-    head.add(ck);
-});
-
-/* -- Face detail texture overlay (brows, lips, nose shading, contour)
-      Applied as a decal-like plane sitting just in front of the face -- */
-const faceDecal = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.80, 0.88, 1, 1),
-    new THREE.MeshBasicMaterial({
-        map: detailTex,
-        transparent: true,
-        opacity: 1.0,
-        depthWrite: false
-    })
-);
-faceDecal.position.set(0, -0.04, 0.395);
-head.add(faceDecal);
-
-/* -- Nose -- */
-const noseRoot = new THREE.Group();
-noseRoot.position.set(0, 0.05, 0.36);
-head.add(noseRoot);
-
-const noseBridge = new THREE.Mesh(new THREE.SphereGeometry(0.048, 16, 12), matSkin);
-noseBridge.scale.set(0.52, 2.0, 0.60);
-noseBridge.position.set(0, -0.07, 0.02);
-noseRoot.add(noseBridge);
-
-const noseTip = new THREE.Mesh(new THREE.SphereGeometry(0.058, 18, 14), matSkin);
-noseTip.scale.set(0.90, 0.72, 0.90);
-noseTip.position.set(0, -0.18, 0.045);
-noseRoot.add(noseTip);
-
-[-1,1].forEach(s => {
-    const ala = new THREE.Mesh(new THREE.SphereGeometry(0.038, 14, 10), matSkin);
-    ala.scale.set(0.80, 0.62, 0.65);
-    ala.position.set(s * 0.048, -0.195, 0.028);
-    noseRoot.add(ala);
-});
-
-/* -- Ears -- */
-[-1,1].forEach(s => {
-    const ear = new THREE.Group();
-    ear.position.set(s * 0.40, -0.04, 0.01);
-    const lobe = new THREE.Mesh(new THREE.SphereGeometry(0.072, 16, 12), matSkin);
-    lobe.scale.set(0.38, 0.82, 0.42);
-    ear.add(lobe);
-    const antiT = new THREE.Mesh(new THREE.SphereGeometry(0.034, 10, 8), matSkin);
-    antiT.scale.set(0.5, 0.7, 0.4);
-    antiT.position.set(0, 0.04, 0.01);
-    ear.add(antiT);
-    head.add(ear);
-});
-
-/* ================================================================
-   EYES — high detail: eyeball + iris/pupil + cornea dome + lashes
-================================================================ */
-const leftEye  = makeEye(-0.145);
-const rightEye = makeEye( 0.145);
-head.add(leftEye);
-head.add(rightEye);
-
-function makeEye(x) {
-    const g = new THREE.Group();
-    g.position.set(x, 0.045, 0.30);
-
-    // Eyeball
-    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.068, 28, 22), matEyeWhite);
-    ball.scale.set(1, 0.90, 0.88);
-    g.add(ball);
-
-    // Iris disc
-    const iris = new THREE.Mesh(new THREE.CircleGeometry(0.043, 40), matIris);
-    iris.position.z = 0.060;
-    g.add(iris);
-
-    // Pupil dark
-    const pupil = new THREE.Mesh(
-        new THREE.CircleGeometry(0.020, 24),
-        new THREE.MeshBasicMaterial({ color: 0x030101 })
-    );
-    pupil.position.z = 0.062;
-    g.add(pupil);
-
-    // Cornea dome
-    const cornea = new THREE.Mesh(new THREE.SphereGeometry(0.048, 20, 16), matCornea);
-    cornea.scale.set(0.88, 0.82, 0.55);
-    cornea.position.z = 0.040;
-    g.add(cornea);
-
-    // Catchlight (always faces camera)
-    const glint = new THREE.Mesh(
-        new THREE.CircleGeometry(0.010, 12),
-        new THREE.MeshBasicMaterial({ color: 0xffffff })
-    );
-    glint.position.set(0.014, 0.016, 0.064);
-    g.add(glint);
-
-    // Upper eyelid crease
-    const lidTop = new THREE.Mesh(
-        new THREE.BoxGeometry(0.130, 0.018, 0.010),
-        new THREE.MeshBasicMaterial({ color: 0x1a0d09, transparent: true, opacity: 0.85 })
-    );
-    lidTop.position.set(0, 0.062, 0.020);
-    lidTop.rotation.x = -0.20;
-    g.add(lidTop);
-
-    // Lower lid subtle line
-    const lidBot = new THREE.Mesh(
-        new THREE.BoxGeometry(0.115, 0.009, 0.008),
-        new THREE.MeshBasicMaterial({ color: 0x2a1010, transparent: true, opacity: 0.55 })
-    );
-    lidBot.position.set(0, -0.062, 0.018);
-    lidBot.rotation.x = 0.16;
-    g.add(lidBot);
-
-    return g;
-}
-
-/* ================================================================
-   NECK + SHOULDERS
-================================================================ */
-const neck = new THREE.Group();
-neck.position.set(0, -0.56, 0);
-head.add(neck);
-
-const neckCyl = cyl(0.105, 0.135, 0.30, 22, matSkinSoft);
-neckCyl.position.y = -0.15;
-neck.add(neckCyl);
-
-// Sternocleidomastoid — slight muscular definition
-[-1,1].forEach(s => {
-    const scm = cyl(0.028, 0.040, 0.24, 10, matSkinSoft);
-    scm.position.set(s * 0.062, -0.12, 0.02);
-    scm.rotation.z = s * 0.12;
-    neck.add(scm);
-});
-
-/* ================================================================
-   TORSO  (visible shoulders + chest, portrait cut-off)
-================================================================ */
-const torso = new THREE.Group();
-torso.position.set(0, -0.86, 0);
-head.add(torso);
-
-// Shoulder width — broad graceful
-[-1,1].forEach(s => {
-    const trap = new THREE.Mesh(new THREE.SphereGeometry(0.18, 20, 16), matSkinSoft);
-    trap.scale.set(0.90, 0.60, 0.70);
-    trap.position.set(s * 0.34, 0.12, 0);
-    torso.add(trap);
-});
-
-// Chest / clavicle area — LatheGeometry silhouette
-const chestProfile = [
-    new THREE.Vector2(0.14, 0.0),
-    new THREE.Vector2(0.28, 0.06),
-    new THREE.Vector2(0.36, 0.16),
-    new THREE.Vector2(0.34, 0.28),
-    new THREE.Vector2(0.28, 0.38),
-    new THREE.Vector2(0.22, 0.46),
-    new THREE.Vector2(0.26, 0.54),
-    new THREE.Vector2(0.32, 0.62),
-    new THREE.Vector2(0.32, 0.70),
-];
-const chestMesh = new THREE.Mesh(new THREE.LatheGeometry(chestProfile, 40), matCloth);
-torso.add(chestMesh);
-
-// Collarbone highlight
-const clavPts = [
-    new THREE.Vector3(-0.30, 0.09, 0.10),
-    new THREE.Vector3(-0.10, 0.14, 0.13),
-    new THREE.Vector3( 0,    0.14, 0.13),
-    new THREE.Vector3( 0.10, 0.14, 0.13),
-    new THREE.Vector3( 0.30, 0.09, 0.10)
-];
-const clavMesh = new THREE.Mesh(
-    new THREE.TubeGeometry(new THREE.CatmullRomCurve3(clavPts), 14, 0.008, 6, false),
-    new THREE.MeshPhongMaterial({ color: 0xd09060, specular: 0xfff0d0, shininess: 28 })
-);
-torso.add(clavMesh);
-
-/* ================================================================
-   HAIR — high-volume dark brunette, textured hull + layered strands
-================================================================ */
-const hair = new THREE.Group();
-head.add(hair);
-
-// Outer volume cap
-const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.46, 48, 36), matHair);
-hairCap.scale.set(0.88, 0.72, 0.94);
-hairCap.position.set(0, 0.10, -0.04);
-hair.add(hairCap);
-
-// Parted crown — slight asymmetry (part slightly left)
-const crownDip = new THREE.Mesh(new THREE.SphereGeometry(0.10, 16, 12), matHair);
-crownDip.scale.set(0.30, 0.20, 0.60);
-crownDip.position.set(-0.02, 0.42, 0.10);
-hair.add(crownDip);
-
-// Front hairline coming forward over forehead
-const forelock = new THREE.Mesh(new THREE.SphereGeometry(0.38, 36, 24), matHair);
-forelock.scale.set(0.78, 0.35, 0.60);
-forelock.position.set(0.0, 0.28, 0.20);
-hair.add(forelock);
-
-// Side panels — frame the face
-[-1,1].forEach(s => {
-    const side = new THREE.Mesh(new THREE.SphereGeometry(0.22, 24, 18), matHair);
-    side.scale.set(0.45, 1.10, 0.52);
-    side.position.set(s * 0.38, -0.04, 0.04);
-    hair.add(side);
-    // Lower side — hangs past jaw
-    const lower = new THREE.Mesh(new THREE.SphereGeometry(0.14, 18, 14), matHair);
-    lower.scale.set(0.50, 0.95, 0.48);
-    lower.position.set(s * 0.38, -0.36, 0.00);
-    hair.add(lower);
-});
-
-// Back bulk — long hair mass behind head
-const backMass = new THREE.Mesh(new THREE.SphereGeometry(0.44, 36, 28), matHair);
-backMass.scale.set(0.88, 1.30, 0.72);
-backMass.position.set(0, -0.12, -0.22);
-hair.add(backMass);
-
-// Individual accent strands — front wisps
-for (let i = -4; i <= 4; i++) {
-    const pts = [];
-    const bx = i * 0.038;
-    for (let j = 0; j <= 8; j++) {
-        const frac = j / 8;
-        pts.push(new THREE.Vector3(
-            bx + Math.sin(frac * 1.8 + i*0.3) * 0.025,
-            0.32 - frac * 0.38,
-            0.20 + frac * 0.10
-        ));
-    }
-    const strand = new THREE.Mesh(
-        new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 8, 0.006, 5, false),
-        matHair
-    );
-    hair.add(strand);
-}
-
-/* ================================================================
-   AMBIENT PARTICLES (subtle, not cartoon)
-================================================================ */
-const pCount = 60;
-const pGeo = new THREE.BufferGeometry();
-const pPos = new Float32Array(pCount * 3);
-for (let i = 0; i < pCount; i++) {
-    pPos[i*3  ] = (Math.random()-0.5) * 2.4;
-    pPos[i*3+1] = (Math.random()-0.5) * 2.4;
-    pPos[i*3+2] = (Math.random()-0.5) * 1.4 - 0.4;
-}
-pGeo.setAttribute('position', new THREE.Float32BufferAttribute(pPos, 3));
-const pSpeeds = new Float32Array(pCount);
-for (let i = 0; i < pCount; i++) pSpeeds[i] = 0.0006 + Math.random() * 0.0012;
-const particles = new THREE.Points(pGeo,
-    new THREE.PointsMaterial({ color: 0x8B5CF6, size: 0.007, transparent: true, opacity: 0.28 }));
-scene.add(particles);
-
-/* ================================================================
-   STATE / ANIMATION
-================================================================ */
+/* ── state ── */
 let state   = 'idle';
-let walking = false;
-let t = 0;
-let blinkTimer = 0;
-let isBlinking = false;
+let t       = 0;
+
+/* ── blink ── */
+let blinkT      = 0;
+let blinkPhase  = 0; // 0=open 1=closing 2=opening
+let blinkFrame  = 0;
+let nextBlink   = 3.5;
+
+/* ── speak ── */
+let jawOpen = 0;  // 0..1
+
+/* ── breath ── */
+let breathY = 0;
+
+/* ── head sway ── */
+let headSwayX = 0;
+let headSwayY = 0;
 
 window.setState   = s => { state = s; };
-window.setWalking = w => { walking = w; };
+window.setWalking = () => {};
+window.setView    = () => {};
 
-window.setView = function(v) {
-    if (v === 'full') {
-        camera.position.set(0, -0.28, 2.20);
-        camera.lookAt(0, -0.20, 0);
-    } else {
-        camera.position.set(0, 0.08, 1.32);
-        camera.lookAt(0, 0.04, 0);
-    }
-};
+/* ══════════════════════════════════════════════
+   DRAWING — each function is a painter's layer
+══════════════════════════════════════════════ */
 
-function animate() {
-    requestAnimationFrame(animate);
-    t += 0.016;
+function s(v) { return v * SCALE; } // scale helper
 
-    // Gentle idle float
-    sasha.position.y = Math.sin(t * 0.85) * 0.007;
-    sasha.rotation.y = Math.sin(t * 0.30) * 0.025;
-
-    // Breathing — chest/torso subtle scale
-    const breath = Math.sin(t * 1.25) * 0.006;
-    if (torso) {
-        torso.scale.y = 1 + breath;
-        torso.scale.x = 1 - breath * 0.5;
-    }
-
-    // Head micro-movements
-    head.rotation.z = Math.sin(t * 0.42) * 0.018;
-
-    // Speaking
-    if (state === 'speaking') {
-        const o = Math.abs(Math.sin(t * 14)) * 0.3 + 0.06;
-        faceDecal.scale.y = 1 + o * 0.018;
-        head.rotation.x = Math.sin(t * 4.2) * 0.022;
-        head.rotation.z = Math.sin(t * 5.1) * 0.022;
-    } else {
-        faceDecal.scale.y = 1;
-        if (state !== 'thinking') head.rotation.x = 0;
-    }
-
-    // Thinking
-    if (state === 'thinking') {
-        head.rotation.y = Math.sin(t * 0.55) * 0.10;
-        head.rotation.x = Math.sin(t * 0.38) * 0.04;
-        sasha.rotation.y = Math.sin(t * 0.55) * 0.06;
-    } else {
-        if (state !== 'speaking') {
-            head.rotation.y = Math.sin(t * 0.28) * 0.015;
-            sasha.rotation.y = Math.sin(t * 0.30) * 0.025;
-        }
-    }
-
-    // Blink (natural timing)
-    blinkTimer += 0.016;
-    const blinkInterval = 3.2 + Math.sin(t * 0.2) * 1.5;
-    if (!isBlinking && blinkTimer > blinkInterval) {
-        isBlinking = true;
-        blinkTimer = 0;
-        leftEye.scale.y  = 0.04;
-        rightEye.scale.y = 0.04;
-        setTimeout(() => {
-            leftEye.scale.y  = 1;
-            rightEye.scale.y = 1;
-            isBlinking = false;
-        }, 95);
-    }
-
-    // Particles
-    const pp = particles.geometry.attributes.position.array;
-    for (let i = 0; i < pCount; i++) {
-        pp[i*3+1] += pSpeeds[i];
-        if (pp[i*3+1] > 1.2) {
-            pp[i*3+1] = -1.2;
-            pp[i*3  ] = (Math.random()-0.5) * 2.4;
-            pp[i*3+2] = (Math.random()-0.5) * 1.4 - 0.4;
-        }
-    }
-    particles.geometry.attributes.position.needsUpdate = true;
-
-    renderer.render(scene, camera);
+/* background gradient */
+function drawBG() {
+  const g = ctx.createRadialGradient(CX, CY*0.7, s(20), CX, CY, s(260));
+  g.addColorStop(0,   '#141020');
+  g.addColorStop(0.6, '#0a0a12');
+  g.addColorStop(1,   '#060608');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
 }
-animate();
 
-window.addEventListener('resize', () => {
-    const W2 = window.innerWidth, H2 = window.innerHeight;
-    camera.aspect = W2 / H2;
-    camera.updateProjectionMatrix();
-    renderer.setSize(W2, H2);
-});
+/* subtle purple halo behind figure */
+function drawHalo(ox, oy) {
+  const g = ctx.createRadialGradient(CX+ox, CY*0.55+oy, s(10), CX+ox, CY*0.55+oy, s(160));
+  g.addColorStop(0,   'rgba(100,60,180,0.18)');
+  g.addColorStop(0.5, 'rgba(60,20,120,0.08)');
+  g.addColorStop(1,   'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.ellipse(CX+ox, CY*0.55+oy, s(160), s(200), 0, 0, Math.PI*2);
+  ctx.fill();
+}
+
+/* ── HAIR (back layer, behind face) ── */
+function drawHairBack(ox, oy) {
+  ctx.save();
+  // Long dark brunette — back mass
+  const hg = ctx.createLinearGradient(CX+ox, CY*0.15+oy, CX+ox, CY*0.95+oy);
+  hg.addColorStop(0,   '#120b05');
+  hg.addColorStop(0.4, '#1e1108');
+  hg.addColorStop(1,   '#0a0603');
+  ctx.fillStyle = hg;
+  ctx.beginPath();
+  ctx.moveTo(CX - s(110)+ox, CY*0.28+oy);
+  ctx.bezierCurveTo(
+    CX - s(140)+ox, CY*0.20+oy,
+    CX - s(155)+ox, CY*0.32+oy,
+    CX - s(148)+ox, CY*0.72+oy
+  );
+  ctx.bezierCurveTo(
+    CX - s(140)+ox, CY*0.90+oy,
+    CX - s(80)+ox,  CY*1.05+oy,
+    CX           +ox, CY*1.08+oy
+  );
+  ctx.bezierCurveTo(
+    CX + s(80)+ox,  CY*1.05+oy,
+    CX + s(140)+ox, CY*0.90+oy,
+    CX + s(148)+ox, CY*0.72+oy
+  );
+  ctx.bezierCurveTo(
+    CX + s(155)+ox, CY*0.32+oy,
+    CX + s(140)+ox, CY*0.20+oy,
+    CX + s(110)+ox, CY*0.28+oy
+  );
+  ctx.bezierCurveTo(
+    CX + s(80)+ox,  CY*0.14+oy,
+    CX - s(80)+ox,  CY*0.14+oy,
+    CX - s(110)+ox, CY*0.28+oy
+  );
+  ctx.closePath();
+  ctx.fill();
+
+  // Hair shine streak
+  const shine = ctx.createLinearGradient(CX - s(60)+ox, CY*0.18+oy, CX+ox, CY*0.28+oy);
+  shine.addColorStop(0,   'rgba(90,55,20,0)');
+  shine.addColorStop(0.5, 'rgba(90,55,20,0.18)');
+  shine.addColorStop(1,   'rgba(90,55,20,0)');
+  ctx.fillStyle = shine;
+  ctx.beginPath();
+  ctx.ellipse(CX - s(30)+ox, CY*0.21+oy, s(60), s(18), -0.3, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/* ── NECK ── */
+function drawNeck(ox, oy) {
+  ctx.save();
+  const ng = ctx.createLinearGradient(CX - s(32)+ox, 0, CX + s(32)+ox, 0);
+  ng.addColorStop(0,   '#7a4a2a');
+  ng.addColorStop(0.25,'#c07040');
+  ng.addColorStop(0.5, '#d08048');
+  ng.addColorStop(0.75,'#b06030');
+  ng.addColorStop(1,   '#7a4a2a');
+  ctx.fillStyle = ng;
+  ctx.beginPath();
+  ctx.moveTo(CX - s(32)+ox, CY*0.74+oy);
+  ctx.bezierCurveTo(CX - s(30)+ox, CY*0.70+oy, CX - s(28)+ox, CY*0.65+oy, CX - s(28)+ox, CY*0.60+oy);
+  ctx.lineTo(CX + s(28)+ox, CY*0.60+oy);
+  ctx.bezierCurveTo(CX + s(28)+ox, CY*0.65+oy, CX + s(30)+ox, CY*0.70+oy, CX + s(32)+ox, CY*0.74+oy);
+  ctx.closePath();
+  ctx.fill();
+
+  // Neck shadow
+  const ns = ctx.createRadialGradient(CX+ox, CY*0.62+oy, s(5), CX+ox, CY*0.62+oy, s(40));
+  ns.addColorStop(0,   'rgba(0,0,0,0)');
+  ns.addColorStop(1,   'rgba(0,0,0,0.22)');
+  ctx.fillStyle = ns;
+  ctx.beginPath();
+  ctx.rect(CX - s(32)+ox, CY*0.60+oy, s(64), s(14));
+  ctx.fill();
+  ctx.restore();
+}
+
+/* ── SHOULDERS ── */
+function drawShoulders(ox, oy) {
+  ctx.save();
+  const sg = ctx.createLinearGradient(CX - s(160)+ox, 0, CX + s(160)+ox, 0);
+  sg.addColorStop(0,   '#1a0f22');
+  sg.addColorStop(0.15,'#2d1a3a');
+  sg.addColorStop(0.5, '#201428');
+  sg.addColorStop(0.85,'#2d1a3a');
+  sg.addColorStop(1,   '#1a0f22');
+  ctx.fillStyle = sg;
+  ctx.beginPath();
+  ctx.moveTo(CX - s(160)+ox, H);
+  ctx.bezierCurveTo(
+    CX - s(160)+ox, CY*0.92+oy,
+    CX - s(90)+ox,  CY*0.82+oy,
+    CX - s(36)+ox,  CY*0.74+oy
+  );
+  ctx.lineTo(CX + s(36)+ox, CY*0.74+oy);
+  ctx.bezierCurveTo(
+    CX + s(90)+ox,  CY*0.82+oy,
+    CX + s(160)+ox, CY*0.92+oy,
+    CX + s(160)+ox, H
+  );
+  ctx.closePath();
+  ctx.fill();
+
+  // Collarbone highlight
+  const cl = ctx.createLinearGradient(CX - s(70)+ox, CY*0.76+oy, CX + s(70)+ox, CY*0.76+oy);
+  cl.addColorStop(0,   'rgba(120,75,40,0)');
+  cl.addColorStop(0.35,'rgba(180,110,60,0.28)');
+  cl.addColorStop(0.5, 'rgba(200,130,70,0.32)');
+  cl.addColorStop(0.65,'rgba(180,110,60,0.28)');
+  cl.addColorStop(1,   'rgba(120,75,40,0)');
+  ctx.fillStyle = cl;
+  ctx.beginPath();
+  ctx.ellipse(CX+ox, CY*0.77+oy, s(70), s(6), 0.08, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/* ── FACE BASE ── */
+function drawFaceBase(ox, oy, blinkAmt) {
+  ctx.save();
+
+  // Face oval — warm deep brown skin
+  const fg = ctx.createRadialGradient(CX+ox - s(8), CY*0.35+oy, s(10), CX+ox, CY*0.39+oy, s(110));
+  fg.addColorStop(0,   '#e2a070');
+  fg.addColorStop(0.18,'#cc8852');
+  fg.addColorStop(0.55,'#b87040');
+  fg.addColorStop(0.85,'#9a5830');
+  fg.addColorStop(1,   '#7a3e1e');
+  ctx.fillStyle = fg;
+  ctx.beginPath();
+  ctx.ellipse(CX+ox, CY*0.39+oy, s(88), s(108), 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // Forehead highlight
+  const fh = ctx.createRadialGradient(CX+ox - s(5), CY*0.18+oy, 0, CX+ox - s(5), CY*0.18+oy, s(55));
+  fh.addColorStop(0,   'rgba(255,200,140,0.28)');
+  fh.addColorStop(1,   'rgba(255,200,140,0)');
+  ctx.fillStyle = fh;
+  ctx.beginPath();
+  ctx.ellipse(CX+ox - s(5), CY*0.18+oy, s(55), s(38), -0.1, 0, Math.PI*2);
+  ctx.fill();
+
+  // Cheek warmth / blush
+  [[- s(60), s(4), 0.16], [s(60), s(4), 0.12]].forEach(([dx, dy, a]) => {
+    const cg = ctx.createRadialGradient(CX+ox+dx, CY*0.43+oy+dy, 0, CX+ox+dx, CY*0.43+oy+dy, s(34));
+    cg.addColorStop(0,   `rgba(185,70,50,${a})`);
+    cg.addColorStop(1,   'rgba(185,70,50,0)');
+    ctx.fillStyle = cg;
+    ctx.beginPath();
+    ctx.ellipse(CX+ox+dx, CY*0.43+oy+dy, s(34), s(22), 0.2, 0, Math.PI*2);
+    ctx.fill();
+  });
+
+  // Cheekbone highlight
+  [[- s(55), s(-4), -0.35], [s(58), s(-4), 0.35]].forEach(([dx, dy, rot]) => {
+    const chg = ctx.createLinearGradient(
+      CX+ox+dx - s(20), CY*0.37+oy+dy,
+      CX+ox+dx + s(20), CY*0.37+oy+dy
+    );
+    chg.addColorStop(0,   'rgba(230,150,80,0)');
+    chg.addColorStop(0.5, 'rgba(230,150,80,0.20)');
+    chg.addColorStop(1,   'rgba(230,150,80,0)');
+    ctx.fillStyle = chg;
+    ctx.beginPath();
+    ctx.ellipse(CX+ox+dx, CY*0.37+oy+dy, s(28), s(10), rot, 0, Math.PI*2);
+    ctx.fill();
+  });
+
+  // Under-chin shadow
+  const cs = ctx.createLinearGradient(0, CY*0.60+oy, 0, CY*0.70+oy);
+  cs.addColorStop(0,   'rgba(0,0,0,0)');
+  cs.addColorStop(1,   'rgba(0,0,0,0.35)');
+  ctx.fillStyle = cs;
+  ctx.beginPath();
+  ctx.ellipse(CX+ox, CY*0.65+oy, s(70), s(15), 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // Jaw / chin definition
+  const jaw2 = ctx.createLinearGradient(CX+ox - s(85), CY*0.55+oy, CX+ox - s(60), CY*0.48+oy);
+  jaw2.addColorStop(0,   'rgba(0,0,0,0.22)');
+  jaw2.addColorStop(1,   'rgba(0,0,0,0)');
+  ctx.fillStyle = jaw2;
+  ctx.beginPath(); ctx.ellipse(CX+ox - s(78), CY*0.52+oy, s(14), s(20), 0.3, 0, Math.PI*2); ctx.fill();
+  const jaw3 = ctx.createLinearGradient(CX+ox + s(85), CY*0.55+oy, CX+ox + s(60), CY*0.48+oy);
+  jaw3.addColorStop(0,   'rgba(0,0,0,0.22)');
+  jaw3.addColorStop(1,   'rgba(0,0,0,0)');
+  ctx.fillStyle = jaw3;
+  ctx.beginPath(); ctx.ellipse(CX+ox + s(78), CY*0.52+oy, s(14), s(20), -0.3, 0, Math.PI*2); ctx.fill();
+
+  ctx.restore();
+}
+
+/* ── EARS ── */
+function drawEars(ox, oy) {
+  ctx.save();
+  [[-1,1]].forEach(() => {
+    [-1, 1].forEach(side => {
+      const ex = CX+ox + side * s(87);
+      const ey = CY*0.38+oy;
+      const eg = ctx.createRadialGradient(ex - side*s(4), ey, 0, ex, ey, s(18));
+      eg.addColorStop(0,   '#c07848');
+      eg.addColorStop(1,   '#884428');
+      ctx.fillStyle = eg;
+      ctx.beginPath();
+      ctx.ellipse(ex, ey, s(12), s(18), side*0.15, 0, Math.PI*2);
+      ctx.fill();
+      // Inner ear shadow
+      const ieg = ctx.createRadialGradient(ex, ey, 0, ex, ey, s(10));
+      ieg.addColorStop(0.3, 'rgba(60,20,8,0.45)');
+      ieg.addColorStop(1,   'rgba(60,20,8,0)');
+      ctx.fillStyle = ieg;
+      ctx.beginPath();
+      ctx.ellipse(ex + side*s(2), ey, s(8), s(12), 0, 0, Math.PI*2);
+      ctx.fill();
+    });
+  });
+  ctx.restore();
+}
+
+/* ── NOSE ── */
+function drawNose(ox, oy) {
+  ctx.save();
+  const nx = CX+ox;
+  const ny = CY*0.42+oy;
+
+  // Bridge shadow (left side of nose)
+  const bsl = ctx.createLinearGradient(nx - s(12), ny - s(24), nx - s(2), ny);
+  bsl.addColorStop(0,   'rgba(0,0,0,0)');
+  bsl.addColorStop(1,   'rgba(0,0,0,0.18)');
+  ctx.fillStyle = bsl;
+  ctx.beginPath();
+  ctx.moveTo(nx - s(6), ny - s(26));
+  ctx.bezierCurveTo(nx - s(14), ny - s(18), nx - s(16), ny - s(4), nx - s(8), ny + s(8));
+  ctx.bezierCurveTo(nx - s(4), ny + s(10), nx - s(2), ny + s(9), nx - s(1), ny + s(8));
+  ctx.bezierCurveTo(nx - s(2), ny, nx - s(4), ny - s(18), nx - s(4), ny - s(26));
+  ctx.closePath();
+  ctx.fill();
+
+  // Nose tip — slightly wider / Nubian
+  const ntg = ctx.createRadialGradient(nx, ny + s(10), 0, nx, ny + s(10), s(28));
+  ntg.addColorStop(0,   '#c07848');
+  ntg.addColorStop(0.5, '#a86030');
+  ntg.addColorStop(1,   'rgba(100,45,18,0)');
+  ctx.fillStyle = ntg;
+  ctx.beginPath();
+  ctx.ellipse(nx, ny + s(10), s(26), s(16), 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // Nostril shadows
+  [[-s(14), s(12)], [s(14), s(12)]].forEach(([dx, dy]) => {
+    const nog = ctx.createRadialGradient(nx+dx, ny+dy, 0, nx+dx, ny+dy, s(9));
+    nog.addColorStop(0,   'rgba(40,12,4,0.70)');
+    nog.addColorStop(0.6, 'rgba(40,12,4,0.30)');
+    nog.addColorStop(1,   'rgba(40,12,4,0)');
+    ctx.fillStyle = nog;
+    ctx.beginPath();
+    ctx.ellipse(nx+dx, ny+dy, s(9), s(7), dx<0 ? -0.4 : 0.4, 0, Math.PI*2);
+    ctx.fill();
+  });
+
+  // Nose highlight
+  const nhl = ctx.createLinearGradient(nx, ny - s(22), nx, ny + s(2));
+  nhl.addColorStop(0,   'rgba(240,170,90,0)');
+  nhl.addColorStop(0.5, 'rgba(240,170,90,0.22)');
+  nhl.addColorStop(1,   'rgba(240,170,90,0)');
+  ctx.fillStyle = nhl;
+  ctx.beginPath();
+  ctx.ellipse(nx + s(3), ny - s(8), s(5), s(18), 0, 0, Math.PI*2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/* ── EYES ── */
+function drawEyes(ox, oy, blinkAmt) {
+  ctx.save();
+  const ey = CY*0.34+oy;
+
+  [[-s(36), 1], [s(36), -1]].forEach(([dx, flip]) => {
+    const ex = CX+ox + dx;
+
+    // Eye socket shadow
+    const ess = ctx.createRadialGradient(ex, ey, s(2), ex, ey + s(2), s(26));
+    ess.addColorStop(0,   'rgba(30,8,2,0.40)');
+    ess.addColorStop(1,   'rgba(30,8,2,0)');
+    ctx.fillStyle = ess;
+    ctx.beginPath();
+    ctx.ellipse(ex, ey + s(1), s(26), s(14), 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // Eyeball white
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(ex, ey, s(20), s(14)*( 1 - blinkAmt*0.9), 0, 0, Math.PI*2);
+    ctx.fillStyle = '#f0e8e0';
+    ctx.fill();
+
+    // Iris — deep dark brown
+    const ig = ctx.createRadialGradient(ex - s(2), ey - s(2), 0, ex, ey, s(9));
+    ig.addColorStop(0,   '#4a2810');
+    ig.addColorStop(0.4, '#361808');
+    ig.addColorStop(0.85,'#200e04');
+    ig.addColorStop(1,   '#100602');
+    ctx.fillStyle = ig;
+    ctx.beginPath();
+    ctx.arc(ex, ey, s(9) * (1 - blinkAmt*0.85), 0, Math.PI*2);
+    ctx.fill();
+
+    // Pupil
+    ctx.fillStyle = '#090302';
+    ctx.beginPath();
+    ctx.arc(ex, ey, s(5) * (1 - blinkAmt*0.85), 0, Math.PI*2);
+    ctx.fill();
+
+    // Catchlight
+    ctx.fillStyle = 'rgba(255,255,255,0.88)';
+    ctx.beginPath();
+    ctx.ellipse(ex - s(3), ey - s(3), s(2.5), s(2), -0.3, 0, Math.PI*2);
+    ctx.fill();
+    // Secondary small glint
+    ctx.fillStyle = 'rgba(255,255,255,0.40)';
+    ctx.beginPath();
+    ctx.arc(ex + s(3), ey + s(2), s(1.2), 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.restore(); // clip for eyelid
+
+    // Upper lid coverage (blink)
+    if (blinkAmt > 0) {
+      const lidH = s(14) * blinkAmt;
+      const lidG = ctx.createLinearGradient(0, ey - s(14)*0.4, 0, ey + lidH);
+      lidG.addColorStop(0,   '#7a4820');
+      lidG.addColorStop(1,   '#9a6030');
+      ctx.fillStyle = lidG;
+      ctx.beginPath();
+      ctx.ellipse(ex, ey - s(14)*0.4 + lidH*0.5, s(20), s(14)*0.5 + lidH*0.5, 0, Math.PI, Math.PI*2);
+      ctx.fill();
+    }
+
+    // Upper lash line
+    const lashThick = s(2.5 + blinkAmt*2);
+    ctx.strokeStyle = '#1a0808';
+    ctx.lineWidth = lashThick;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(ex - s(21), ey - s(7)*(1-blinkAmt));
+    ctx.bezierCurveTo(
+      ex - s(10), ey - s(13)*(1-blinkAmt),
+      ex + s(10), ey - s(13)*(1-blinkAmt),
+      ex + s(21), ey - s(7)*(1-blinkAmt)
+    );
+    ctx.stroke();
+
+    // Lower lash (subtle)
+    ctx.strokeStyle = 'rgba(30,8,8,0.55)';
+    ctx.lineWidth = s(1.2);
+    ctx.beginPath();
+    ctx.moveTo(ex - s(19), ey + s(9)*(1-blinkAmt*0.5));
+    ctx.bezierCurveTo(ex, ey + s(13)*(1-blinkAmt*0.3), ex + s(10), ey + s(13)*(1-blinkAmt*0.3), ex + s(19), ey + s(9)*(1-blinkAmt*0.5));
+    ctx.stroke();
+
+    // Eye shadow makeup — smoky
+    const smk = ctx.createLinearGradient(0, ey - s(16), 0, ey - s(6));
+    smk.addColorStop(0,   'rgba(40,12,20,0.35)');
+    smk.addColorStop(1,   'rgba(40,12,20,0)');
+    ctx.fillStyle = smk;
+    ctx.beginPath();
+    ctx.ellipse(ex, ey - s(9), s(22), s(9), 0, 0, Math.PI);
+    ctx.fill();
+  });
+
+  ctx.restore();
+}
+
+/* ── EYEBROWS ── */
+function drawBrows(ox, oy) {
+  ctx.save();
+  ctx.lineCap = 'round';
+
+  [[-s(36), 1, -0.12], [s(36), -1, 0.12]].forEach(([dx, flip, tilt]) => {
+    const bx = CX+ox + dx;
+    const by = CY*0.26+oy;
+
+    // Brow fill
+    ctx.fillStyle = '#1e0e06';
+    ctx.beginPath();
+    ctx.moveTo(bx - s(22), by + s(4));
+    ctx.bezierCurveTo(bx - s(12), by - s(4), bx + s(6), by - s(6), bx + s(22), by + s(2));
+    ctx.bezierCurveTo(bx + s(14), by + s(7), bx - s(4), by + s(8), bx - s(22), by + s(6));
+    ctx.closePath();
+    ctx.fill();
+
+    // Brow highlight — inner arch
+    const bhg = ctx.createLinearGradient(bx - s(22), 0, bx + s(22), 0);
+    bhg.addColorStop(0,   'rgba(60,25,10,0)');
+    bhg.addColorStop(0.4, 'rgba(60,25,10,0.30)');
+    bhg.addColorStop(1,   'rgba(60,25,10,0)');
+    ctx.fillStyle = bhg;
+    ctx.beginPath();
+    ctx.moveTo(bx - s(22), by + s(4));
+    ctx.bezierCurveTo(bx - s(12), by - s(4), bx + s(6), by - s(6), bx + s(22), by + s(2));
+    ctx.bezierCurveTo(bx + s(14), by + s(7), bx - s(4), by + s(8), bx - s(22), by + s(6));
+    ctx.closePath();
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+/* ── LIPS ── */
+function drawLips(ox, oy, jawOpenAmt) {
+  ctx.save();
+  const lx = CX+ox;
+  const ly = CY*0.536+oy;
+  const jd = jawOpenAmt * s(10); // jaw drop
+
+  // Philtrum shadow
+  const phg = ctx.createRadialGradient(lx, ly - s(8), 0, lx, ly - s(8), s(12));
+  phg.addColorStop(0,   'rgba(0,0,0,0.20)');
+  phg.addColorStop(1,   'rgba(0,0,0,0)');
+  ctx.fillStyle = phg;
+  ctx.beginPath(); ctx.ellipse(lx, ly - s(5), s(10), s(8), 0, 0, Math.PI*2); ctx.fill();
+
+  // Lip base fill — Cupid's bow upper
+  const ulg = ctx.createLinearGradient(0, ly - s(10), 0, ly + s(2));
+  ulg.addColorStop(0,   '#8a2030');
+  ulg.addColorStop(0.5, '#a02838');
+  ulg.addColorStop(1,   '#6a1825');
+  ctx.fillStyle = ulg;
+  ctx.beginPath();
+  ctx.moveTo(lx - s(26), ly);
+  ctx.bezierCurveTo(lx - s(20), ly - s(3), lx - s(10), ly - s(9), lx, ly - s(7));
+  ctx.bezierCurveTo(lx + s(10), ly - s(9), lx + s(20), ly - s(3), lx + s(26), ly);
+  ctx.bezierCurveTo(lx + s(16), ly + s(7), lx + s(2), ly + s(8), lx, ly + s(8));
+  ctx.bezierCurveTo(lx - s(2), ly + s(8), lx - s(16), ly + s(7), lx - s(26), ly);
+  ctx.closePath();
+  ctx.fill();
+
+  // Lower lip (drops with jaw)
+  const llg = ctx.createLinearGradient(0, ly + s(8), 0, ly + s(20) + jd);
+  llg.addColorStop(0,   '#a8303a');
+  llg.addColorStop(0.4, '#b83840');
+  llg.addColorStop(1,   '#7a1e28');
+  ctx.fillStyle = llg;
+  ctx.beginPath();
+  ctx.moveTo(lx - s(26), ly + s(8));
+  ctx.bezierCurveTo(lx - s(18), ly + s(9), lx - s(4), ly + s(10), lx, ly + s(10));
+  ctx.bezierCurveTo(lx + s(4), ly + s(10), lx + s(18), ly + s(9), lx + s(26), ly + s(8));
+  ctx.bezierCurveTo(lx + s(20), ly + s(18) + jd, lx + s(2), ly + s(20) + jd, lx, ly + s(20) + jd);
+  ctx.bezierCurveTo(lx - s(2), ly + s(20) + jd, lx - s(20), ly + s(18) + jd, lx - s(26), ly + s(8));
+  ctx.closePath();
+  ctx.fill();
+
+  // Mouth opening (visible when jaw opens)
+  if (jawOpenAmt > 0.05) {
+    const mog = ctx.createLinearGradient(0, ly + s(8), 0, ly + s(12) + jd*0.6);
+    mog.addColorStop(0,   'rgba(18,4,6,0.9)');
+    mog.addColorStop(1,   'rgba(6,2,2,0.8)');
+    ctx.fillStyle = mog;
+    ctx.beginPath();
+    ctx.ellipse(lx, ly + s(9) + jd*0.3, s(14)*jawOpenAmt + s(4), s(3) + jd*0.5, 0, 0, Math.PI*2);
+    ctx.fill();
+    // Teeth hint
+    if (jawOpenAmt > 0.3) {
+      const tg = ctx.createLinearGradient(0, ly + s(8.5), 0, ly + s(12) + jd*0.2);
+      tg.addColorStop(0, 'rgba(240,225,205,0.60)');
+      tg.addColorStop(1, 'rgba(200,185,165,0.20)');
+      ctx.fillStyle = tg;
+      ctx.beginPath();
+      ctx.ellipse(lx, ly + s(9.5) + jd*0.15, s(12)*jawOpenAmt, s(2.5) + jd*0.2, 0, 0, Math.PI);
+      ctx.fill();
+    }
+  }
+
+  // Lip gloss highlight
+  const lhl = ctx.createLinearGradient(0, ly - s(9), 0, ly - s(2));
+  lhl.addColorStop(0,   'rgba(255,180,180,0.45)');
+  lhl.addColorStop(1,   'rgba(255,180,180,0)');
+  ctx.fillStyle = lhl;
+  ctx.beginPath();
+  ctx.moveTo(lx - s(18), ly - s(2));
+  ctx.bezierCurveTo(lx - s(10), ly - s(8), lx + s(10), ly - s(8), lx + s(18), ly - s(2));
+  ctx.bezierCurveTo(lx + s(8), ly + s(1), lx - s(8), ly + s(1), lx - s(18), ly - s(2));
+  ctx.closePath();
+  ctx.fill();
+
+  // Lower lip gloss
+  const llh = ctx.createRadialGradient(lx, ly + s(14) + jd*0.4, 0, lx, ly + s(14) + jd*0.4, s(16));
+  llh.addColorStop(0,   'rgba(255,170,160,0.30)');
+  llh.addColorStop(1,   'rgba(255,170,160,0)');
+  ctx.fillStyle = llh;
+  ctx.beginPath();
+  ctx.ellipse(lx, ly + s(14) + jd*0.4, s(14), s(5) + jd*0.15, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // Mouth corner lines
+  ctx.strokeStyle = 'rgba(60,10,18,0.55)';
+  ctx.lineWidth = s(0.8);
+  [[-s(26), 0], [s(26), 0]].forEach(([dx]) => {
+    ctx.beginPath();
+    ctx.moveTo(lx+dx, ly - s(1));
+    ctx.bezierCurveTo(lx+dx, ly + s(4), lx+dx, ly + s(7), lx+dx, ly + s(8));
+    ctx.stroke();
+  });
+
+  ctx.restore();
+}
+
+/* ── HAIR FRONT (over face edges) ── */
+function drawHairFront(ox, oy) {
+  ctx.save();
+  const hfg = ctx.createLinearGradient(CX+ox, CY*0.06+oy, CX+ox, CY*0.25+oy);
+  hfg.addColorStop(0,   '#130b04');
+  hfg.addColorStop(0.6, '#1f1208');
+  hfg.addColorStop(1,   'rgba(20,10,4,0)');
+  ctx.fillStyle = hfg;
+
+  // Hairline — natural soft arc
+  ctx.beginPath();
+  ctx.moveTo(CX - s(90)+ox, CY*0.22+oy);
+  ctx.bezierCurveTo(
+    CX - s(70)+ox, CY*0.10+oy,
+    CX - s(30)+ox, CY*0.07+oy,
+    CX      +ox,   CY*0.08+oy
+  );
+  ctx.bezierCurveTo(
+    CX + s(30)+ox, CY*0.07+oy,
+    CX + s(70)+ox, CY*0.10+oy,
+    CX + s(90)+ox, CY*0.22+oy
+  );
+  ctx.bezierCurveTo(
+    CX + s(100)+ox, CY*0.18+oy,
+    CX + s(100)+ox, CY*0.06+oy,
+    CX + s(60)+ox,  CY*0.04+oy
+  );
+  ctx.bezierCurveTo(
+    CX + s(20)+ox, CY*0.02+oy,
+    CX - s(20)+ox, CY*0.02+oy,
+    CX - s(60)+ox, CY*0.04+oy
+  );
+  ctx.bezierCurveTo(
+    CX - s(100)+ox, CY*0.06+oy,
+    CX - s(100)+ox, CY*0.18+oy,
+    CX - s(90)+ox,  CY*0.22+oy
+  );
+  ctx.closePath();
+  ctx.fill();
+
+  // Left wisp strand
+  const wl = ctx.createLinearGradient(CX - s(88)+ox, CY*0.22+oy, CX - s(70)+ox, CY*0.42+oy);
+  wl.addColorStop(0,   '#1f1208');
+  wl.addColorStop(1,   'rgba(20,10,4,0)');
+  ctx.fillStyle = wl;
+  ctx.beginPath();
+  ctx.moveTo(CX - s(88)+ox, CY*0.22+oy);
+  ctx.bezierCurveTo(CX - s(94)+ox, CY*0.30+oy, CX - s(90)+ox, CY*0.40+oy, CX - s(78)+ox, CY*0.44+oy);
+  ctx.bezierCurveTo(CX - s(72)+ox, CY*0.40+oy, CX - s(74)+ox, CY*0.30+oy, CX - s(80)+ox, CY*0.24+oy);
+  ctx.closePath();
+  ctx.fill();
+
+  // Right wisp strand
+  const wr = ctx.createLinearGradient(CX + s(88)+ox, CY*0.22+oy, CX + s(70)+ox, CY*0.42+oy);
+  wr.addColorStop(0,   '#1f1208');
+  wr.addColorStop(1,   'rgba(20,10,4,0)');
+  ctx.fillStyle = wr;
+  ctx.beginPath();
+  ctx.moveTo(CX + s(88)+ox, CY*0.22+oy);
+  ctx.bezierCurveTo(CX + s(94)+ox, CY*0.30+oy, CX + s(90)+ox, CY*0.40+oy, CX + s(78)+ox, CY*0.44+oy);
+  ctx.bezierCurveTo(CX + s(72)+ox, CY*0.40+oy, CX + s(74)+ox, CY*0.30+oy, CX + s(80)+ox, CY*0.24+oy);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/* ── PARTICLES (subtle) ── */
+const pCount = 45;
+const px = [], py = [], psp = [], pSize = [], pAlpha = [];
+for (let i = 0; i < pCount; i++) {
+  px[i]    = Math.random() * 1.0 - 0.5;  // -0.5..0.5 relative to CX
+  py[i]    = Math.random() * 2.0 - 0.2;  // relative to H
+  psp[i]   = 0.0003 + Math.random() * 0.0006;
+  pSize[i] = 0.8 + Math.random() * 2.4;
+  pAlpha[i]= 0.08 + Math.random() * 0.18;
+}
+function drawParticles() {
+  ctx.save();
+  for (let i = 0; i < pCount; i++) {
+    py[i] -= psp[i];
+    if (py[i] < -0.1) { py[i] = 1.05; px[i] = Math.random() - 0.5; }
+    const ppx = CX + px[i] * W;
+    const ppy = py[i] * H;
+    ctx.fillStyle = `rgba(120,70,220,${pAlpha[i]})`;
+    ctx.beginPath();
+    ctx.arc(ppx, ppy, pSize[i], 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* ── HUD frame — thin cyberpunk corner brackets ── */
+function drawHUD() {
+  const pad  = s(12);
+  const fl   = pad, fr = W - pad, ft = pad, fb = H - pad;
+  const brk  = s(28);
+  const alpha = 0.4 + Math.sin(t * 1.4) * 0.08;
+
+  ctx.save();
+  ctx.strokeStyle = `rgba(0,200,255,${alpha})`;
+  ctx.lineWidth = 1.2;
+  ctx.lineCap = 'square';
+
+  [[fl, ft, 1, 1], [fr, ft, -1, 1], [fl, fb, 1, -1], [fr, fb, -1, -1]].forEach(([cx2, cy2, sx, sy]) => {
+    ctx.beginPath(); ctx.moveTo(cx2, cy2 + sy*brk); ctx.lineTo(cx2, cy2); ctx.lineTo(cx2 + sx*brk, cy2); ctx.stroke();
+    // accent dot
+    ctx.fillStyle = `rgba(139,92,246,${alpha*1.5})`;
+    ctx.beginPath(); ctx.arc(cx2, cy2, 2.2, 0, Math.PI*2); ctx.fill();
+  });
+
+  // Status text bottom-left
+  ctx.fillStyle = `rgba(0,200,255,${alpha*0.9})`;
+  ctx.font = `bold ${s(11)}px monospace`;
+  ctx.fillText('S.A.S.H.A.  NODE_01', fl + s(6), fb - s(8));
+
+  // State indicator top-right
+  const stateLabel = state === 'speaking' ? '◉ SPEAKING' : state === 'thinking' ? '◎ THINKING' : '● IDLE';
+  const stateColor = state === 'speaking' ? `rgba(80,220,80,${alpha})` : state === 'thinking' ? `rgba(255,190,0,${alpha})` : `rgba(0,200,255,${alpha*0.7})`;
+  ctx.fillStyle = stateColor;
+  ctx.textAlign = 'right';
+  ctx.fillText(stateLabel, fr - s(6), ft + s(16));
+  ctx.textAlign = 'left';
+  ctx.restore();
+}
+
+/* ════════════════════════════════════
+   MAIN RENDER LOOP
+════════════════════════════════════ */
+function draw() {
+  /* blink animation */
+  blinkT += 0.016;
+  if (blinkPhase === 0 && blinkT > nextBlink) {
+    blinkPhase = 1;
+    blinkT = 0;
+  }
+  if (blinkPhase === 1) { blinkFrame += 0.18; if (blinkFrame >= 1) { blinkFrame = 1; blinkPhase = 2; } }
+  if (blinkPhase === 2) { blinkFrame -= 0.22; if (blinkFrame <= 0) { blinkFrame = 0; blinkPhase = 0; blinkT = 0; nextBlink = 2.8 + Math.random()*2.5; } }
+  const blink = blinkFrame;
+
+  /* breath */
+  breathY = Math.sin(t * 1.2) * s(2.5);
+
+  /* head sway */
+  if (state === 'thinking') {
+    headSwayX = Math.sin(t * 0.55) * s(7);
+    headSwayY = Math.sin(t * 0.38) * s(4);
+  } else if (state === 'speaking') {
+    headSwayX = Math.sin(t * 4.0) * s(2);
+    headSwayY = Math.sin(t * 3.2) * s(1.5);
+  } else {
+    headSwayX += (Math.sin(t * 0.30) * s(3) - headSwayX) * 0.06;
+    headSwayY += (Math.sin(t * 0.22) * s(2) - headSwayY) * 0.06;
+  }
+
+  /* jaw (speaking) */
+  if (state === 'speaking') {
+    jawOpen += (Math.abs(Math.sin(t * 12)) * 0.65 + 0.1 - jawOpen) * 0.25;
+  } else {
+    jawOpen += (0 - jawOpen) * 0.15;
+  }
+
+  const ox = headSwayX;
+  const oy = headSwayY + breathY;
+
+  ctx.clearRect(0, 0, W, H);
+
+  drawBG();
+  drawParticles();
+  drawHalo(ox, oy);
+  drawHairBack(ox, oy);
+  drawShoulders(0, breathY * 0.5);
+  drawNeck(ox, oy);
+  drawEars(ox, oy);
+  drawFaceBase(ox, oy, blink);
+  drawBrows(ox, oy);
+  drawNose(ox, oy);
+  drawEyes(ox, oy, blink);
+  drawLips(ox, oy, jawOpen);
+  drawHairFront(ox, oy);
+  drawHUD();
+
+  t += 0.016;
+  requestAnimationFrame(draw);
+}
+draw();
 </script>
 </body>
 </html>

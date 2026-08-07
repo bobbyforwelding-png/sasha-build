@@ -1218,11 +1218,12 @@ fun MainVaultDashboard(
     onStopOverlay: (() -> Unit)? = null,
     overlayRunning: Boolean = false
 ) {
-    var activeSection by remember { mutableStateOf("SASHA") }
-    var activePage by remember { mutableStateOf("CONSOLE") }
+    var activeTab by remember { mutableStateOf("SASHA") }
+    var consolePage by remember { mutableStateOf("CONSOLE") }
     var showSettings by remember { mutableStateOf(false) }
     val neonCyan = Color(0xFF00E5FF)
     val neonPurple = Color(0xFF8B5CF6)
+    val liveRed = Color(0xFFFF2D55)
     val darkBg = Color(0xFF0A0A0F)
     val darkSurface = Color(0xFF111118)
     val darkCard = Color(0xFF1A1A24)
@@ -1230,171 +1231,194 @@ fun MainVaultDashboard(
     Box(modifier = Modifier.fillMaxSize().background(darkBg)) {
         FlamesSkullsWatermark()
         Column(modifier = Modifier.fillMaxSize().padding(8.dp).windowInsetsPadding(WindowInsets.safeDrawing)) {
-            // SECTION SWITCHER — Sasha Prime by itself / Console + Vault together
+
+            // ── TOP BAR: 3-tab nav + status + settings ──
             Row(
                 modifier = Modifier.fillMaxWidth()
                     .gunmetalBorder(3.dp, 10.dp)
                     .background(darkSurface, RoundedCornerShape(10.dp))
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                CyberTab("SASHA PRIME", activeSection == "SASHA", neonCyan) { activeSection = "SASHA" }
-                CyberTab("CONSOLE + VAULT", activeSection == "SYSTEM", neonPurple) { activeSection = "SYSTEM" }
+                // Status dot
+                Box(modifier = Modifier.size(6.dp).background(
+                    if (viewModel.isLoading) Color(0xFFFBBF24) else neonCyan,
+                    RoundedCornerShape(50)
+                ))
+                Spacer(modifier = Modifier.width(4.dp))
+
+                // 3 main tabs
+                CyberTab("SASHA",   activeTab == "SASHA",   neonCyan)   { activeTab = "SASHA" }
+                CyberTab("CONSOLE", activeTab == "CONSOLE", neonCyan)   { activeTab = "CONSOLE" }
+                CyberTab("VAULT",   activeTab == "VAULT",   neonPurple) { activeTab = "VAULT" }
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                IconButton(onClick = { showSettings = true }, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = neonCyan, modifier = Modifier.size(16.dp))
+                }
             }
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            if (activeSection == "SASHA") {
-                // ─── SECTION 1: SASHA PRIME — Node_01, her persona, her attitude, her console by itself ───
-                Column(modifier = Modifier.fillMaxSize()) {
-                    // Her — front and center, filling the top of the screen
-                    Box(
-                        modifier = Modifier.fillMaxWidth().weight(1.1f)
-                            .gunmetalBorder(4.dp, 12.dp)
-                            .background(darkSurface, RoundedCornerShape(12.dp))
-                            .padding(4.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        SashaAvatar3D(
-                            isSpeaking = viewModel.isSpeaking,
-                            isThinking = viewModel.isLoading,
-                            avatarUrl = viewModel.avatarUrl,
-                            modifier = Modifier.fillMaxSize(),
-                            onAvatarUrlChange = { viewModel.saveAvatarUrl(it) }
-                        )
-                    }
+            // ── CONTENT ──
+            when (activeTab) {
 
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    // Persona banner — she announces herself
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(modifier = Modifier.size(8.dp).background(neonCyan, RoundedCornerShape(50)))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            "SASHA PRIME — NODE_01 // MASTER UI & LEAD COLLABORATOR",
-                            color = neonCyan,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(onClick = { showSettings = true }, modifier = Modifier.size(28.dp)) {
-                            Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = neonCyan, modifier = Modifier.size(16.dp))
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    // Walk-out button
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        val overlayButtonColor = if (overlayRunning) neonCyan else neonPurple
+                "SASHA" -> {
+                    // Avatar fills the top, overlay button, then her personal console
+                    Column(modifier = Modifier.fillMaxSize()) {
                         Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(overlayButtonColor.copy(alpha = 0.15f))
-                                .border(1.dp, overlayButtonColor.copy(alpha = 0.6f), RoundedCornerShape(20.dp))
-                                .clickable {
-                                    if (overlayRunning) {
-                                        onStopOverlay?.invoke()
-                                    } else {
-                                        onRequestOverlay?.invoke()
-                                    }
-                                }
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                            modifier = Modifier.fillMaxWidth().weight(1.1f)
+                                .gunmetalBorder(4.dp, 12.dp)
+                                .background(darkSurface, RoundedCornerShape(12.dp))
+                                .padding(4.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Text(
-                                text = if (overlayRunning) "● SASHA IS WITH YOU — TAP TO DISMISS" else "LET SASHA OUT — SHE WALKS OVER EVERY APP",
-                                color = overlayButtonColor,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.sp
+                            SashaAvatar3D(
+                                isSpeaking = viewModel.isSpeaking,
+                                isThinking = viewModel.isLoading,
+                                avatarUrl = viewModel.avatarUrl,
+                                modifier = Modifier.fillMaxSize(),
+                                onAvatarUrlChange = { viewModel.saveAvatarUrl(it) }
                             )
                         }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        // Persona banner
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(modifier = Modifier.size(7.dp).background(neonCyan, RoundedCornerShape(50)))
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                "SASHA PRIME — NODE_01 // MASTER UI & LEAD COLLABORATOR",
+                                color = neonCyan,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        // Overlay release button
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                            val oColor = if (overlayRunning) neonCyan else neonPurple
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(oColor.copy(alpha = 0.15f))
+                                    .border(1.dp, oColor.copy(alpha = 0.6f), RoundedCornerShape(20.dp))
+                                    .clickable { if (overlayRunning) onStopOverlay?.invoke() else onRequestOverlay?.invoke() }
+                                    .padding(horizontal = 14.dp, vertical = 7.dp)
+                            ) {
+                                Text(
+                                    if (overlayRunning) "● SASHA IS WITH YOU — TAP TO DISMISS" else "RELEASE SASHA — WALKS OVER EVERY APP",
+                                    color = oColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Box(
+                            modifier = Modifier.weight(1f).fillMaxWidth()
+                                .gunmetalBorder(4.dp, 12.dp)
+                                .background(darkCard, RoundedCornerShape(12.dp))
+                                .clip(RoundedCornerShape(12.dp))
+                                .padding(4.dp)
+                        ) {
+                            FlamesSkullsWatermark()
+                            ConsoleScreen(viewModel)
+                        }
                     }
+                }
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                "CONSOLE" -> {
+                    // Status row
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.size(6.dp).background(neonCyan, RoundedCornerShape(50)))
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(if (viewModel.isLoading) "PROCESSING..." else "ONLINE", color = if (viewModel.isLoading) Color(0xFFFBBF24) else neonCyan, fontFamily = FontFamily.Monospace, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.weight(1f))
+                        // Overlay button — accessible from Console too
+                        val oColor2 = if (overlayRunning) neonCyan else neonPurple
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(oColor2.copy(alpha = 0.12f))
+                                .border(1.dp, oColor2.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+                                .clickable { if (overlayRunning) onStopOverlay?.invoke() else onRequestOverlay?.invoke() }
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(if (overlayRunning) "● LIVE" else "RELEASE", color = oColor2, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
 
-                    // Her console — by itself, nothing else in the way
+                    // Sub-tabs: CONSOLE · CODEX · PROJECTS · GO LIVE
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                            .gunmetalBorder(2.dp, 8.dp)
+                            .background(darkSurface, RoundedCornerShape(8.dp))
+                            .padding(3.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        CyberTab("CONSOLE",  consolePage == "CONSOLE",  neonCyan) { consolePage = "CONSOLE" }
+                        CyberTab("CODEX",    consolePage == "CODEX",    neonCyan) { consolePage = "CODEX" }
+                        CyberTab("PROJECTS", consolePage == "PROJECTS", neonCyan) { consolePage = "PROJECTS" }
+                        CyberTab("GO LIVE",  consolePage == "GO LIVE",  liveRed)  { consolePage = "GO LIVE" }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
                     Box(
-                        modifier = Modifier.weight(1f).fillMaxWidth()
+                        modifier = Modifier.weight(1f)
                             .gunmetalBorder(4.dp, 12.dp)
                             .background(darkCard, RoundedCornerShape(12.dp))
                             .clip(RoundedCornerShape(12.dp))
                             .padding(4.dp)
                     ) {
                         FlamesSkullsWatermark()
-                        ConsoleScreen(viewModel)
-                    }
-                }
-            } else {
-                // ─── SECTION 2: CONSOLE + VAULT — Nodes 01 & 02, the working stack ───
-                // Status bar
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(modifier = Modifier.size(6.dp).background(neonCyan, RoundedCornerShape(50)))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        if (viewModel.isLoading) "SASHA PROCESSING..." else "SASHA ONLINE",
-                        color = if (viewModel.isLoading) Color(0xFFFBBF24) else neonCyan,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                    Text(
-                        "SASHA TRADING SYSTEM",
-                        color = Color(0xFF555577),
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 9.sp
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    IconButton(onClick = { showSettings = true }, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = neonCyan, modifier = Modifier.size(16.dp))
+                        when (consolePage) {
+                            "CONSOLE"  -> ConsoleScreen(viewModel)
+                            "CODEX"    -> CodexScreen(viewModel)
+                            "PROJECTS" -> ProjectsScreen(viewModel)
+                            "GO LIVE"  -> GoLiveScreen(viewModel)
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
-
-                // Tab bar with gunmetal shell
-                Row(
-                    modifier = Modifier.fillMaxWidth()
-                        .gunmetalBorder(3.dp, 10.dp)
-                        .background(darkSurface, RoundedCornerShape(10.dp))
-                        .padding(4.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    CyberTab("CONSOLE", activePage == "CONSOLE", neonCyan) { activePage = "CONSOLE" }
-                    CyberTab("CODEX", activePage == "CODEX", neonCyan) { activePage = "CODEX" }
-                    CyberTab("PROJECTS", activePage == "PROJECTS", neonCyan) { activePage = "PROJECTS" }
-                    CyberTab("VAULT", activePage == "VAULT", neonPurple) { activePage = "VAULT" }
-                    CyberTab("GO LIVE", activePage == "GO LIVE", Color(0xFFFF2D55)) { activePage = "GO LIVE" }
-                }
-
-                Spacer(modifier = Modifier.height(6.dp))
-
-                // Content area with thick gunmetal shell + flames/skulls watermark
-                Box(
-                    modifier = Modifier.weight(1f)
-                        .gunmetalBorder(4.dp, 12.dp)
-                        .background(darkCard, RoundedCornerShape(12.dp))
-                        .clip(RoundedCornerShape(12.dp))
-                        .padding(4.dp)
-                ) {
-                    FlamesSkullsWatermark()
-                    when (activePage) {
-                        "CONSOLE" -> ConsoleScreen(viewModel)
-                        "CODEX" -> CodexScreen(viewModel)
-                        "PROJECTS" -> ProjectsScreen(viewModel)
-                        "VAULT" -> VaultTerminalScreen(viewModel)
-                        "GO LIVE" -> GoLiveScreen(viewModel)
+                "VAULT" -> {
+                    // Overlay button accessible from Vault too
+                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.size(6.dp).background(neonPurple, RoundedCornerShape(50)))
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text("VAULT: UNRESTRICTED", color = neonPurple, fontFamily = FontFamily.Monospace, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.weight(1f))
+                        val oColor3 = if (overlayRunning) neonCyan else neonPurple
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(oColor3.copy(alpha = 0.12f))
+                                .border(1.dp, oColor3.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+                                .clickable { if (overlayRunning) onStopOverlay?.invoke() else onRequestOverlay?.invoke() }
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(if (overlayRunning) "● LIVE" else "RELEASE", color = oColor3, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Box(
+                        modifier = Modifier.weight(1f)
+                            .gunmetalBorder(4.dp, 12.dp)
+                            .background(darkCard, RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(12.dp))
+                            .padding(4.dp)
+                    ) {
+                        FlamesSkullsWatermark()
+                        VaultTerminalScreen(viewModel)
                     }
                 }
             }
