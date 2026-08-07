@@ -76,6 +76,8 @@ let mixer = null;
 let idleAction = null;
 let headBone = null;
 let spineBone = null;
+let portraitCard = null;
+let sideCards = [];
 let state = 'idle';
 let walking = false;
 let t = 0;
@@ -116,110 +118,99 @@ function findBone(root, regex) {
   return found;
 }
 
-function createFallbackHuman() {
-  const skin = new THREE.MeshPhongMaterial({ color: 0xd3a27a, specular: 0xfff0db, shininess: 28 });
-  const cloth = new THREE.MeshPhongMaterial({ color: 0x374258, specular: 0xa7c6ff, shininess: 26 });
+function createPhotoAvatar() {
+  const textureLoader = new THREE.TextureLoader();
+  textureLoader.crossOrigin = 'anonymous';
+  const photoUrls = [
+    'https://i.ibb.co/20g4HX07/Screenshot-20260304-011245-Replika.jpg',
+    'https://i.ibb.co/pjhf7NxM/113865214645403.jpg',
+    'https://i.ibb.co/MD9bPVSc/113853448874834.jpg'
+  ];
+  let loaded = 0;
+  const textures = new Array(photoUrls.length);
+  const fallbackTexture = new THREE.CanvasTexture((() => {
+    const c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 512;
+    const x = c.getContext('2d');
+    x.fillStyle = '#101722';
+    x.fillRect(0, 0, c.width, c.height);
+    x.fillStyle = '#d7b08b';
+    x.font = 'bold 42px monospace';
+    x.textAlign = 'center';
+    x.fillText('S.A.S.H.A.', c.width / 2, c.height / 2);
+    return c;
+  })());
 
-  const fallback = new THREE.Group();
+  function tryBuild() {
+    loaded += 1;
+    if (loaded < photoUrls.length) return;
 
-  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.18, 0.66, 30), cloth);
-  torso.position.y = 1.06;
-  fallback.add(torso);
+    const portraitTexture = textures[0] || fallbackTexture;
+    portraitTexture.encoding = THREE.sRGBEncoding;
+    portraitTexture.minFilter = THREE.LinearFilter;
+    portraitTexture.magFilter = THREE.LinearFilter;
 
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.12, 16), skin);
-  neck.position.y = 1.45;
-  fallback.add(neck);
+    const portraitMaterial = new THREE.MeshBasicMaterial({
+      map: portraitTexture,
+      transparent: true,
+      opacity: 0.96,
+      side: THREE.DoubleSide
+    });
 
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 36, 36), skin);
-  head.position.y = 1.68;
-  head.scale.set(0.86, 1.0, 0.9);
-  fallback.add(head);
+    const portraitGeometry = new THREE.PlaneGeometry(0.95, 1.22);
+    portraitCard = new THREE.Mesh(portraitGeometry, portraitMaterial);
+    portraitCard.position.set(0, 1.25, 0);
+    avatarRoot.add(portraitCard);
+    model = portraitCard;
+    headBone = portraitCard;
+    spineBone = portraitCard;
 
-  function arm(side) {
-    const g = new THREE.Group();
-    g.position.set(side * 0.26, 1.22, 0);
+    const sideLeftTex = textures[1] || portraitTexture;
+    const sideRightTex = textures[2] || portraitTexture;
+    [sideLeftTex, sideRightTex].forEach((tex) => {
+      tex.encoding = THREE.sRGBEncoding;
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+    });
 
-    const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.045, 0.33, 14), skin);
-    upper.position.y = -0.17;
-    g.add(upper);
+    const sideGeo = new THREE.PlaneGeometry(0.45, 0.62);
+    const leftCard = new THREE.Mesh(sideGeo, new THREE.MeshBasicMaterial({
+      map: sideLeftTex,
+      transparent: true,
+      opacity: 0.36,
+      side: THREE.DoubleSide
+    }));
+    leftCard.position.set(-0.68, 1.26, -0.2);
+    leftCard.rotation.y = 0.58;
 
-    const fore = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.035, 0.31, 14), skin);
-    fore.position.y = -0.48;
-    fore.rotation.z = side * 0.08;
-    g.add(fore);
+    const rightCard = new THREE.Mesh(sideGeo, new THREE.MeshBasicMaterial({
+      map: sideRightTex,
+      transparent: true,
+      opacity: 0.36,
+      side: THREE.DoubleSide
+    }));
+    rightCard.position.set(0.68, 1.26, -0.2);
+    rightCard.rotation.y = -0.58;
 
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.045, 14, 14), skin);
-    hand.scale.set(0.9, 0.65, 0.75);
-    hand.position.y = -0.68;
-    g.add(hand);
-
-    fallback.add(g);
+    sideCards = [leftCard, rightCard];
+    sideCards.forEach((card) => avatarRoot.add(card));
   }
 
-  arm(-1);
-  arm(1);
-
-  function leg(side) {
-    const g = new THREE.Group();
-    g.position.set(side * 0.1, 0.72, 0);
-
-    const thigh = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.06, 0.42, 14), cloth);
-    thigh.position.y = -0.22;
-    g.add(thigh);
-
-    const shin = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.045, 0.4, 14), cloth);
-    shin.position.y = -0.62;
-    g.add(shin);
-
-    const foot = new THREE.Mesh(new THREE.SphereGeometry(0.06, 14, 14), cloth);
-    foot.scale.set(1.1, 0.55, 1.8);
-    foot.position.set(0, -0.84, 0.06);
-    g.add(foot);
-
-    fallback.add(g);
-  }
-
-  leg(-1);
-  leg(1);
-
-  avatarRoot.add(fallback);
-  model = fallback;
-  headBone = head;
-  spineBone = torso;
+  photoUrls.forEach((url, idx) => {
+    textureLoader.load(
+      url,
+      (tex) => {
+        textures[idx] = tex;
+        tryBuild();
+      },
+      undefined,
+      () => tryBuild()
+    );
+  });
 }
 
-function loadHumanModel() {
-  if (typeof THREE.GLTFLoader === 'undefined') {
-    createFallbackHuman();
-    return;
-  }
-
-  const loader = new THREE.GLTFLoader();
-  loader.load(
-    'models/CesiumMan.glb',
-    (gltf) => {
-      model = gltf.scene;
-      model.scale.set(1.45, 1.45, 1.45);
-      model.position.set(0, 0, 0);
-      avatarRoot.add(model);
-
-      mixer = new THREE.AnimationMixer(model);
-      if (gltf.animations && gltf.animations.length > 0) {
-        idleAction = mixer.clipAction(gltf.animations[0]);
-        idleAction.play();
-      }
-
-      headBone = findBone(model, /head/i);
-      spineBone = findBone(model, /(spine|chest)/i);
-    },
-    undefined,
-    () => {
-      createFallbackHuman();
-    }
-  );
-}
-
-loadHumanModel();
+createPhotoAvatar();
 setPortraitCamera();
 
 function animate() {
@@ -242,6 +233,17 @@ function animate() {
     idleAction.paused = false;
     idleAction.setEffectiveWeight(1.0);
   }
+
+  if (portraitCard) {
+    const scale = state === 'speaking' ? 1.01 : (state === 'thinking' ? 0.985 : 1.0);
+    portraitCard.scale.set(scale, scale, 1);
+    portraitCard.position.y = 1.25 + Math.sin(t * 1.2) * 0.015;
+  }
+
+  sideCards.forEach((card, i) => {
+    card.position.y = 1.26 + Math.sin(t * (1.1 + i * 0.2) + i) * 0.012;
+    card.rotation.z = Math.sin(t * 0.8 + i) * 0.04;
+  });
 
   if (spineBone) {
     spineBone.rotation.x = breath;
