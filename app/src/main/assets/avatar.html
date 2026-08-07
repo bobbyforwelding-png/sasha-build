@@ -7,11 +7,11 @@
   * { margin:0; padding:0; }
   body { background:#000; overflow:hidden; width:100vw; height:100vh; }
   canvas { display:block; }
-  #loading { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:#00bfff; font-family:monospace; font-size:12px; z-index:99; }
+  #loading { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:#9ee6ff; font-family:monospace; font-size:12px; z-index:99; }
 </style>
 </head>
 <body>
-<div id="loading">INITIALIZING...</div>
+<div id="loading">SASHA ONLINE...</div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 document.getElementById('loading').style.display='none';
@@ -19,587 +19,518 @@ document.getElementById('loading').style.display='none';
 const W = window.innerWidth, H = window.innerHeight;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(35, W/H, 0.1, 100);
-camera.position.set(0, 0.3, 3.2);
-camera.lookAt(0, 0.1, 0);
+camera.position.set(0, 0.35, 3.6);
+camera.lookAt(0, -0.15, 0);
 
 const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
 renderer.setSize(W, H);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
 renderer.setClearColor(0x000000, 0);
 document.body.appendChild(renderer.domElement);
 
-const amb = new THREE.AmbientLight(0x1a1a4e, 0.6);
+const amb = new THREE.AmbientLight(0x88aaff, 0.9);
 scene.add(amb);
-const light1 = new THREE.PointLight(0x00bfff, 1.8, 15);
-light1.position.set(1.5, 1.5, 3);
+const light1 = new THREE.PointLight(0x9ee6ff, 2.0, 20);
+light1.position.set(1.5, 1.8, 3.5);
 scene.add(light1);
-const light2 = new THREE.PointLight(0x8b5cf6, 0.8, 15);
-light2.position.set(-1.5, -0.5, 2);
+const light2 = new THREE.PointLight(0xc47bff, 0.9, 20);
+light2.position.set(-1.6, 0.2, 2.5);
 scene.add(light2);
-const rim = new THREE.PointLight(0x00bfff, 0.5, 10);
-rim.position.set(0, 0, -2);
+const rim = new THREE.PointLight(0x9ee6ff, 0.6, 12);
+rim.position.set(0, 0.5, -2.2);
 scene.add(rim);
 
-const head = new THREE.Group();
-scene.add(head);
+const sasha = new THREE.Group();
+scene.add(sasha);
 
-// Build face geometry from custom vertices
-const faceShape = new THREE.Shape();
-const headGeo = new THREE.BufferGeometry();
-
-// Face mesh - custom shape with jaw, cheeks, forehead
-const faceVerts = [];
-const faceIndices = [];
-
-// Face outline points (right side, mirrored)
-const outline = [
-    [0, 0.85],     // top of forehead
-    [0.25, 0.82],
-    [0.42, 0.72],  // temple
-    [0.48, 0.58],  // cheekbone upper
-    [0.50, 0.42],  // cheekbone
-    [0.47, 0.28],  // cheek
-    [0.40, 0.15],  // jaw upper
-    [0.30, 0.02],  // jaw
-    [0.18, -0.08], // jaw lower
-    [0.08, -0.14], // chin side
-    [0, -0.18],    // chin tip
-];
-
-// Generate face mesh from outline
-const segX = 16, segY = 20;
-for (let iy = 0; iy <= segY; iy++) {
-    const v = iy / segY;
-    const y = -0.18 + v * 1.03;
-    let width = 0;
-    for (let i = 0; i < outline.length - 1; i++) {
-        if (y >= outline[i+1][1] && y <= outline[i][1]) {
-            const t = (y - outline[i+1][1]) / (outline[i][1] - outline[i+1][1]);
-            width = outline[i+1][0] + t * (outline[i][0] - outline[i+1][0]);
-            break;
-        }
-    }
-    if (y > 0.85) {
-        const t = (y - 0.85) / (1.03 - 0.85);
-        width = 0.25 * (1 - t);
-    }
-
-    for (let ix = 0; ix <= segX; ix++) {
-        const u = ix / segX;
-        const x = -width + u * width * 2;
-        // Face curvature - more depth at nose, less at edges
-        const noseDist = Math.abs(x) / Math.max(width, 0.01);
-        const browBulge = Math.max(0, 1 - noseDist * 1.5) * 0.15;
-        const cheekBulge = Math.max(0, 1 - noseDist * 2) * 0.08;
-        const chinRecess = y < 0 ? Math.max(0, 1 - Math.abs(x)/0.1) * 0.05 : 0;
-
-        let z = 0.3 * (1 - noseDist * noseDist); // base curvature
-        // Forehead bulge
-        if (y > 0.5) z += browBulge * (1 - (y - 0.5) * 1.5);
-        // Brow ridge
-        if (y > 0.35 && y < 0.5) z += 0.06;
-        // Nose bridge
-        if (Math.abs(x) < 0.06 && y > 0.1 && y < 0.45) z += 0.12 - Math.abs(x) * 1.5;
-        // Nose tip
-        if (Math.abs(x) < 0.05 && y > 0.0 && y < 0.15) z += 0.18 * (1 - Math.abs(x)/0.05);
-        // Cheek
-        if (y > 0.1 && y < 0.4 && Math.abs(x) > 0.15) z += cheekBulge;
-        // Upper lip area - slight forward
-        if (y > -0.05 && y < 0.05 && Math.abs(x) < 0.12) z += 0.04;
-        // Chin
-        if (y < -0.05) z -= chinRecess;
-        // Eye sockets - depress
-        if (y > 0.2 && y < 0.42) {
-            const eyeX = (Math.abs(x) > 0.08 && Math.abs(x) < 0.22);
-            if (eyeX) z -= 0.04;
-        }
-
-        faceVerts.push(x, y, z);
-    }
-}
-
-// Generate triangles
-for (let iy = 0; iy < segY; iy++) {
-    for (let ix = 0; ix < segX; ix++) {
-        const a = iy * (segX + 1) + ix;
-        const b = a + 1;
-        const c = a + (segX + 1);
-        const d = c + 1;
-        faceIndices.push(a, c, b, b, c, d);
-    }
-}
-
-headGeo.setAttribute('position', new THREE.Float32BufferAttribute(faceVerts, 3));
-headGeo.setIndex(faceIndices);
-headGeo.computeVertexNormals();
-
-const faceMat = new THREE.MeshPhongMaterial({
-    color: 0x0a0a2e,
-    emissive: 0x001133,
-    specular: 0x00bfff,
-    shininess: 80,
+// ============ MATERIALS ============
+const skinMat = new THREE.MeshPhongMaterial({
+    color: 0xc9a0b5,
+    emissive: 0x301022,
+    specular: 0x9ee6ff,
+    shininess: 70,
     transparent: true,
-    opacity: 0.7,
+    opacity: 0.92,
     side: THREE.DoubleSide
 });
-const faceMesh = new THREE.Mesh(headGeo, faceMat);
-head.add(faceMesh);
+const skinSoft = new THREE.MeshPhongMaterial({
+    color: 0xd9aec0,
+    emissive: 0x301022,
+    specular: 0x9ee6ff,
+    shininess: 60,
+    transparent: true,
+    opacity: 0.85,
+    side: THREE.DoubleSide
+});
+const glowMat = new THREE.MeshBasicMaterial({ color: 0x9ee6ff, transparent: true, opacity: 0.5 });
+const hairMat = new THREE.MeshPhongMaterial({
+    color: 0x2a1830,
+    emissive: 0x180a22,
+    specular: 0x9ee6ff,
+    shininess: 90,
+    transparent: true,
+    opacity: 0.95,
+    side: THREE.DoubleSide
+});
+const wireHolo = new THREE.MeshBasicMaterial({ color: 0x9ee6ff, wireframe: true, transparent: true, opacity: 0.1 });
+const outlineMat = new THREE.MeshBasicMaterial({ color: 0x9ee6ff, transparent: true, opacity: 0.35 });
 
-// Wireframe overlay
-const wireMat = new THREE.MeshBasicMaterial({ color: 0x00bfff, wireframe: true, transparent: true, opacity: 0.15 });
-const wireMesh = new THREE.Mesh(headGeo.clone(), wireMat);
-head.add(wireMesh);
-
-// EYES
-function createEye(x, y) {
-    const eyeGroup = new THREE.Group();
-    eyeGroup.position.set(x, y, 0.32);
-
-    // Eyeball
-    const ballGeo = new THREE.SphereGeometry(0.055, 16, 16);
-    const ballMat = new THREE.MeshPhongMaterial({ color: 0x112244, emissive: 0x001122, specular: 0x4488ff, shininess: 120 });
-    const ball = new THREE.Mesh(ballGeo, ballMat);
-    eyeGroup.add(ball);
-
-    // Iris
-    const irisGeo = new THREE.CircleGeometry(0.035, 24);
-    const irisMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
-    const iris = new THREE.Mesh(irisGeo, irisMat);
-    iris.position.z = 0.04;
-    eyeGroup.add(iris);
-
-    // Pupil
-    const pupilGeo = new THREE.CircleGeometry(0.015, 16);
-    const pupilMat = new THREE.MeshBasicMaterial({ color: 0x000011 });
-    const pupil = new THREE.Mesh(pupilGeo, pupilMat);
-    pupil.position.z = 0.045;
-    eyeGroup.add(pupil);
-
-    // Eye glow
-    const glowGeo = new THREE.SphereGeometry(0.08, 16, 16);
-    const glowMat = new THREE.MeshBasicMaterial({ color: 0x00bfff, transparent: true, opacity: 0.15 });
-    const glow = new THREE.Mesh(glowGeo, glowMat);
-    eyeGroup.add(glow);
-
-    // Eyelids
-    const lidGeo = new THREE.RingGeometry(0.03, 0.06, 24, 1, 0, Math.PI);
-    const lidMat = new THREE.MeshBasicMaterial({ color: 0x00bfff, transparent: true, opacity: 0.3 });
-    const topLid = new THREE.Mesh(lidGeo, lidMat);
-    topLid.position.set(0, 0.02, 0.04);
-    topLid.rotation.z = Math.PI;
-    eyeGroup.add(topLid);
-
-    return { group: eyeGroup, iris: irisMat, glow: glowMat, ball: ballMat };
+// ============ HELPERS ============
+function limb(bottom, top, length, mat) {
+    const g = new THREE.CylinderGeometry(bottom, top, length, 14, 8);
+    return new THREE.Mesh(g, mat);
+}
+function joint(r, mat) {
+    const g = new THREE.SphereGeometry(r, 12, 12);
+    const m = new THREE.Mesh(g, mat);
+    m.scale.z = 1.25;
+    return m;
 }
 
-const leftEye = createEye(-0.14, 0.30);
-const rightEye = createEye(0.14, 0.30);
-head.add(leftEye.group);
-head.add(rightEye.group);
+// ============ HEAD ============
+const head = new THREE.Group();
+head.position.y = 1.86;
+sasha.add(head);
 
-// EYEBROWS
-function createBrow(x, y, flip) {
-    const pts = [new THREE.Vector3(-0.1, 0, 0), new THREE.Vector3(-0.03, 0.025, 0), new THREE.Vector3(0.05, 0.02, 0), new THREE.Vector3(0.1, -0.01, 0)];
-    const curve = new THREE.CatmullRomCurve3(pts);
-    const geo = new THREE.TubeGeometry(curve, 16, 0.008, 6, false);
-    const mat = new THREE.MeshBasicMaterial({ color: 0x00bfff, transparent: true, opacity: 0.6 });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(x, y, 0.34);
-    if (flip) mesh.scale.x = -1;
-    return { mesh, mat };
-}
+const skullGeo = new THREE.SphereGeometry(0.28, 32, 32);
+const skull = new THREE.Mesh(skullGeo, skinMat);
+skull.scale.set(0.82, 1.0, 0.88);
+skull.position.y = 0.08;
+head.add(skull);
 
-const leftBrow = createBrow(-0.14, 0.42, false);
-const rightBrow = createBrow(0.14, 0.42, true);
-head.add(leftBrow.mesh);
-head.add(rightBrow.mesh);
+const skullWire = new THREE.Mesh(skullGeo.clone(), wireHolo);
+skullWire.scale.copy(skull.scale);
+skullWire.position.copy(skull.position);
+head.add(skullWire);
 
-// NOSE
-const nosePts = [new THREE.Vector3(0, 0.28, 0.35), new THREE.Vector3(0, 0.18, 0.42), new THREE.Vector3(0, 0.08, 0.45), new THREE.Vector3(0, 0.02, 0.44)];
-const noseCurve = new THREE.CatmullRomCurve3(nosePts);
-const noseGeo = new THREE.TubeGeometry(noseCurve, 16, 0.006, 6, false);
-const noseMat = new THREE.MeshBasicMaterial({ color: 0x00bfff, transparent: true, opacity: 0.35 });
-const nose = new THREE.Mesh(noseGeo, noseMat);
-head.add(nose);
+// Jaw
+const jawGeo = new THREE.SphereGeometry(0.22, 24, 24);
+const jaw = new THREE.Mesh(jawGeo, skinMat);
+jaw.scale.set(0.72, 0.62, 0.78);
+jaw.position.set(0, -0.14, -0.02);
+head.add(jaw);
 
-// Nose tip accent
-const tipGeo = new THREE.SphereGeometry(0.012, 8, 8);
-const tipMat = new THREE.MeshBasicMaterial({ color: 0x00bfff, transparent: true, opacity: 0.5 });
-const noseTip = new THREE.Mesh(tipGeo, tipMat);
-noseTip.position.set(0, 0.02, 0.45);
-head.add(noseTip);
-
-// LIPS
-function createLip(points, y, thickness) {
-    const pts = points.map(p => new THREE.Vector3(p[0], p[1] + y, 0.36 + Math.abs(p[0]) * -0.1));
-    const curve = new THREE.CatmullRomCurve3(pts);
-    const geo = new THREE.TubeGeometry(curve, 20, thickness, 6, false);
-    const mat = new THREE.MeshBasicMaterial({ color: 0x00bfff, transparent: true, opacity: 0.5 });
-    return new THREE.Mesh(geo, mat);
-}
-
-const upperLip = createLip([[-0.1, 0.015], [-0.06, 0.035], [-0.02, 0.025], [0, 0.04], [0.02, 0.025], [0.06, 0.035], [0.1, 0.015]], -0.1, 0.005);
-const lowerLip = createLip([[-0.08, -0.005], [-0.04, -0.025], [0, -0.03], [0.04, -0.025], [0.08, -0.005]], -0.1, 0.006);
-head.add(upperLip);
-head.add(lowerLip);
-
-// Mouth line
-const mouthPts = [new THREE.Vector3(-0.07, -0.1, 0.37), new THREE.Vector3(-0.03, -0.105, 0.39), new THREE.Vector3(0, -0.108, 0.40), new THREE.Vector3(0.03, -0.105, 0.39), new THREE.Vector3(0.07, -0.1, 0.37)];
-const mouthCurve = new THREE.CatmullRomCurve3(mouthPts);
-const mouthGeo = new THREE.TubeGeometry(mouthCurve, 16, 0.004, 6, false);
-const mouthMat = new THREE.MeshBasicMaterial({ color: 0x00bfff, transparent: true, opacity: 0.6 });
-const mouth = new THREE.Mesh(mouthGeo, mouthMat);
-head.add(mouth);
-
-// HAIR - flowing strands from top
-function createStrand(startX, startY, length, curve) {
-    const pts = [];
-    for (let i = 0; i <= 8; i++) {
-        const t = i / 8;
-        pts.push(new THREE.Vector3(
-            startX + Math.sin(t * curve) * 0.05,
-            startY - t * length,
-            0.2 - t * 0.15
-        ));
-    }
-    const c = new THREE.CatmullRomCurve3(pts);
-    const geo = new THREE.TubeGeometry(c, 12, 0.003, 4, false);
-    const mat = new THREE.MeshBasicMaterial({ color: 0x00bfff, transparent: true, opacity: 0.4 });
-    return new THREE.Mesh(geo, mat);
-}
-
-for (let i = -6; i <= 6; i++) {
-    const x = i * 0.035;
-    const len = 0.3 + Math.abs(i) * 0.02;
-    const strand = createStrand(x, 0.85, len, (i * 0.3) + 0.5);
-    head.add(strand);
-}
-
-// Side hair
-for (let side = -1; side <= 1; side += 2) {
-    for (let i = 0; i < 5; i++) {
-        const s = createStrand(side * 0.45, 0.7 - i * 0.08, 0.4 + i * 0.05, side * (1 + i * 0.2));
-        head.add(s);
-    }
-}
-
-// NECK hint
-const neckGeo = new THREE.CylinderGeometry(0.08, 0.1, 0.2, 12);
-const neckMat = new THREE.MeshBasicMaterial({ color: 0x00bfff, transparent: true, opacity: 0.2 });
-const neck = new THREE.Mesh(neckGeo, neckMat);
-neck.position.set(0, -0.3, 0.15);
+// Neck
+const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.11, 0.22, 14), skinMat);
+neck.position.y = -0.34;
 head.add(neck);
 
-// ============ FULL BODY ============
-const body = new THREE.Group();
-body.position.y = -0.35;
-head.add(body);
-
-function holomat(color, opacity) {
-    return new THREE.MeshPhongMaterial({
-        color: color || 0x00bfff,
-        emissive: 0x003344,
-        specular: 0x00bfff,
-        shininess: 60,
-        transparent: true,
-        opacity: opacity !== undefined ? opacity : 0.5,
-        side: THREE.DoubleSide
-    });
+// ============ EARS ============
+function ear(x) {
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 10), skinSoft);
+    e.position.set(x * 0.255, -0.03, 0.05);
+    e.scale.set(0.5, 0.9, 0.4);
+    head.add(e);
 }
+ear(-1); ear(1);
 
-// TORSO - feminine silhouette via lathe (waist, hips, bust)
-const torsoPts = [];
-const torsoProfile = [
-    [0.00, 1.25],  // neck base
-    [0.16, 1.20],  // shoulder line
-    [0.19, 1.00],  // upper chest
-    [0.22, 0.78],  // bust peak
-    [0.18, 0.55],  // under bust
-    [0.14, 0.40],  // waist (smallest)
-    [0.20, 0.22],  // hip rise
-    [0.26, 0.00],  // hips widest
-    [0.22, -0.15], // hip bottom
-    [0.12, -0.22], // crotch area
-];
-for (const p of torsoProfile) torsoPts.push(new THREE.Vector2(p[0], p[1]));
-const torsoGeo = new THREE.LatheGeometry(torsoPts, 24);
-const torso = new THREE.Mesh(torsoGeo, holomat(0x00bfff, 0.4));
-body.add(torso);
+// ============ EYES ============
+function createEye(x) {
+    const g = new THREE.Group();
+    g.position.set(x, 0.09, 0.23);
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.055, 16, 16),
+        new THREE.MeshPhongMaterial({ color: 0xffffff, emissive: 0x223344, specular: 0xffffff, shininess: 140 }));
+    g.add(ball);
+    const iris = new THREE.Mesh(new THREE.CircleGeometry(0.034, 24),
+        new THREE.MeshBasicMaterial({ color: 0x8fd9ff }));
+    iris.position.z = 0.052;
+    g.add(iris);
+    const pupil = new THREE.Mesh(new THREE.CircleGeometry(0.016, 16),
+        new THREE.MeshBasicMaterial({ color: 0x0a0a1a }));
+    pupil.position.z = 0.056;
+    g.add(pupil);
+    const lash = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.014, 0.02),
+        new THREE.MeshBasicMaterial({ color: 0x180a22, transparent: true, opacity: 0.8 }));
+    lash.position.set(0, 0.052, 0.015);
+    lash.rotation.x = -0.15;
+    g.add(lash);
+    return g;
+}
+const leftEye = createEye(-0.115);
+const rightEye = createEye(0.115);
+head.add(leftEye);
+head.add(rightEye);
 
-// Torso wireframe
-const torsoWire = new THREE.Mesh(torsoGeo.clone(), new THREE.MeshBasicMaterial({ color: 0x00bfff, wireframe: true, transparent: true, opacity: 0.12 }));
-body.add(torsoWire);
+// ============ BROWS ============
+function brow(x, y) {
+    const g = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.012, 0.014),
+        new THREE.MeshBasicMaterial({ color: 0x2a1830, transparent: true, opacity: 0.85 }));
+    g.position.set(x, y, 0.235);
+    g.rotation.z = x < 0 ? -0.12 : 0.12;
+    head.add(g);
+}
+brow(-0.115, 0.19);
+brow(0.115, 0.19);
 
-// Bust accents (subtle glow curves)
-function bustCurve(x) {
+// ============ NOSE ============
+const noseGeo = new THREE.ConeGeometry(0.026, 0.14, 10);
+const noseMesh = new THREE.Mesh(noseGeo, skinSoft);
+noseMesh.position.set(0, -0.04, 0.26);
+noseMesh.rotation.x = Math.PI / 2.4;
+head.add(noseMesh);
+const noseTip = new THREE.Mesh(new THREE.SphereGeometry(0.015, 8, 8), skinSoft);
+noseTip.position.set(0, -0.10, 0.25);
+head.add(noseTip);
+
+// ============ LIPS ============
+const lipMat = new THREE.MeshPhongMaterial({
+    color: 0xb0556a,
+    emissive: 0x401020,
+    specular: 0xff88aa,
+    shininess: 90,
+    transparent: true,
+    opacity: 0.9
+});
+const upperLip = new THREE.Mesh(new THREE.SphereGeometry(0.075, 16, 16), lipMat);
+upperLip.scale.set(1.0, 0.32, 0.55);
+upperLip.position.set(0, -0.185, 0.245);
+head.add(upperLip);
+const lowerLip = new THREE.Mesh(new THREE.SphereGeometry(0.065, 16, 16), lipMat);
+lowerLip.scale.set(0.95, 0.28, 0.5);
+lowerLip.position.set(0, -0.215, 0.24);
+head.add(lowerLip);
+
+// Mouth interior
+const mouthGeo = new THREE.SphereGeometry(0.05, 12, 12);
+const mouthOpen = new THREE.Mesh(mouthGeo,
+    new THREE.MeshBasicMaterial({ color: 0x200510, transparent: true, opacity: 0.6 }));
+mouthOpen.scale.set(0.9, 0.2, 0.6);
+mouthOpen.position.set(0, -0.2, 0.225);
+head.add(mouthOpen);
+
+// ============ HAIR ============
+function strand(x, z, len, curve, thick) {
     const pts = [];
     for (let i = 0; i <= 10; i++) {
         const t = i / 10;
-        pts.push(new THREE.Vector3(x * (0.13 + t * 0.02), 0.78 - t * 0.12, 0.14 * Math.sin(t * Math.PI)));
+        pts.push(new THREE.Vector3(
+            x + Math.sin(t * curve) * 0.06 * (1 - t * 0.4),
+            0.42 - t * len,
+            z - t * 0.12
+        ));
     }
     const c = new THREE.CatmullRomCurve3(pts);
-    const g = new THREE.TubeGeometry(c, 12, 0.006, 6, false);
-    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.35 }));
+    const g = new THREE.TubeGeometry(c, 12, thick || 0.006, 5, false);
+    const m = new THREE.Mesh(g, hairMat);
     return m;
 }
-body.add(bustCurve(-1));
-body.add(bustCurve(1));
+// Crown
+for (let i = -12; i <= 12; i++) {
+    const x = i * 0.024;
+    const len = 0.34 + Math.abs(i) * 0.012;
+    head.add(strand(x, 0.18, len, (i * 0.35) + 0.6, 0.007));
+}
+// Fringe
+for (let i = -8; i <= 8; i++) {
+    const x = i * 0.022;
+    head.add(strand(x, 0.28, 0.22 + Math.abs(i) * 0.008, 1.6 + Math.abs(i) * 0.2, 0.005));
+}
+// Sides + back
+for (let side = -1; side <= 1; side += 2) {
+    for (let i = 0; i < 7; i++) {
+        head.add(strand(side * (0.16 + i * 0.03), 0.2, 0.5 + i * 0.09, side * (0.8 + i * 0.25), 0.006));
+    }
+}
+// Back cascade
+for (let i = -6; i <= 6; i++) {
+    const x = i * 0.022;
+    head.add(strand(x, -0.05, 0.42 + Math.abs(i) * 0.02, 0.3 + i * 0.1, 0.007));
+}
 
-// ARMS
+// ============ TORSO ============
+const torso = new THREE.Group();
+torso.position.y = 1.2;
+sasha.add(torso);
+
+// Torso lathe profile - feminine silhouette
+const tp = [
+    [0.115, 0.0],   // neck base
+    [0.20, 0.03],   // shoulders
+    [0.235, 0.12],  // upper chest
+    [0.26, 0.22],   // bust top
+    [0.28, 0.30],   // bust peak
+    [0.23, 0.40],   // under bust
+    [0.175, 0.48],  // waist
+    [0.185, 0.56],
+    [0.25, 0.64],   // hip rise
+    [0.285, 0.72],  // hip widest
+    [0.26, 0.80],   // hip lower
+    [0.17, 0.86],   // crotch
+];
+const torsoPts = tp.map(p => new THREE.Vector2(p[0], p[1]));
+const torsoGeo = new THREE.LatheGeometry(torsoPts, 32);
+const torsoMesh = new THREE.Mesh(torsoGeo, skinMat);
+torso.add(torsoMesh);
+torso.add(new THREE.Mesh(torsoGeo.clone(), wireHolo));
+
+// Bust
+function bust(x) {
+    const g = new THREE.Group();
+    const bg = new THREE.SphereGeometry(0.11, 18, 18);
+    const b = new THREE.Mesh(bg, skinSoft);
+    b.scale.set(1.0, 0.78, 0.7);
+    g.add(b);
+    g.position.set(x * 0.135, 0.28, 0.115);
+    torso.add(g);
+}
+bust(-1); bust(1);
+
+// Shoulders
+function shoulder(x) {
+    const s = new THREE.Mesh(new THREE.SphereGeometry(0.085, 12, 12), skinSoft);
+    s.position.set(x * 0.22, 0.035, 0);
+    torso.add(s);
+}
+shoulder(-1); shoulder(1);
+
+// Clavicle line
+const clavPts = [new THREE.Vector3(-0.2, 0.06, 0.05), new THREE.Vector3(0, 0.085, 0.075), new THREE.Vector3(0.2, 0.06, 0.05)];
+const clavCurve = new THREE.CatmullRomCurve3(clavPts);
+const clavMesh = new THREE.Mesh(new THREE.TubeGeometry(clavCurve, 12, 0.004, 5, false), glowMat);
+torso.add(clavMesh);
+
+// Navel accent
+const navel = new THREE.Mesh(new THREE.CircleGeometry(0.012, 12), glowMat);
+navel.position.set(0, 0.46, 0.155);
+navel.rotation.x = -Math.PI / 2;
+torso.add(navel);
+
+// ============ ARMS ============
 function createArm(side) {
     const arm = new THREE.Group();
-    arm.position.set(side * 0.17, 1.15, 0);
-    const shoulderGeo = new THREE.SphereGeometry(0.07, 12, 12);
-    const shoulder = new THREE.Mesh(shoulderGeo, holomat(0x00bfff, 0.35));
-    arm.add(shoulder);
-    const armGeo = new THREE.CylinderGeometry(0.035, 0.028, 0.85, 10);
-    const armMesh = new THREE.Mesh(armGeo, holomat(0x00bfff, 0.35));
-    armMesh.position.y = -0.42;
-    armMesh.rotation.z = side * 0.12;
-    arm.add(armMesh);
+    arm.position.set(side * 0.24, 0.05, 0);
+    // Upper arm
+    const upper = limb(0.045, 0.055, 0.42, skinSoft);
+    upper.position.y = -0.21;
+    upper.rotation.z = side * 0.08;
+    arm.add(upper);
     // Elbow
-    const elbowGeo = new THREE.SphereGeometry(0.032, 10, 10);
-    const elbow = new THREE.Mesh(elbowGeo, holomat(0x00bfff, 0.4));
-    elbow.position.set(side * 0.06, -0.82, 0);
+    const elbow = joint(0.05, skinSoft);
+    elbow.position.set(side * 0.035, -0.42, 0);
     arm.add(elbow);
     // Forearm
-    const foreGeo = new THREE.CylinderGeometry(0.028, 0.022, 0.5, 10);
-    const fore = new THREE.Mesh(foreGeo, holomat(0x00bfff, 0.35));
-    fore.position.set(side * 0.12, -1.2, 0);
-    fore.rotation.z = side * 0.1;
+    const fore = limb(0.035, 0.042, 0.38, skinSoft);
+    fore.position.set(side * 0.07, -0.62, 0);
+    fore.rotation.z = side * 0.06;
     arm.add(fore);
     // Wrist
-    const wrist = new THREE.Mesh(new THREE.SphereGeometry(0.024, 10, 10), holomat(0x00bfff, 0.45));
-    wrist.position.set(side * 0.15, -1.44, 0);
+    const wrist = joint(0.034, skinSoft);
+    wrist.position.set(side * 0.09, -0.81, 0);
     arm.add(wrist);
     // Hand
     const hand = new THREE.Group();
-    hand.position.set(side * 0.15, -1.5, 0);
-    const palm = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 10), holomat(0x00bfff, 0.45));
+    hand.position.set(side * 0.095, -0.86, 0);
+    const palm = new THREE.Mesh(new THREE.SphereGeometry(0.038, 12, 12), skinSoft);
+    palm.scale.set(1.0, 0.85, 0.6);
     hand.add(palm);
-    // Fingers
     for (let i = 0; i < 4; i++) {
-        const fingerGeo = new THREE.CylinderGeometry(0.006, 0.005, 0.08, 6);
-        const finger = new THREE.Mesh(fingerGeo, holomat(0x00bfff, 0.4));
-        finger.position.set(side * (0.02 + i * 0.012), 0.05, 0);
-        finger.rotation.x = 0.15;
-        hand.add(finger);
+        const f = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.006, 0.085, 6), skinSoft);
+        f.position.set(side * (0.018 + i * 0.012), 0.045, i * 0.004);
+        f.rotation.x = 0.12;
+        hand.add(f);
     }
-    // Thumb
-    const thumbGeo = new THREE.CylinderGeometry(0.007, 0.006, 0.06, 6);
-    const thumb = new THREE.Mesh(thumbGeo, holomat(0x00bfff, 0.4));
-    thumb.position.set(side * 0.03, 0.03, 0.03);
-    thumb.rotation.x = -0.6;
-    thumb.rotation.y = side * 0.5;
+    const thumb = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.007, 0.06, 6), skinSoft);
+    thumb.position.set(side * 0.038, 0.02, 0.015);
+    thumb.rotation.x = -0.5;
+    thumb.rotation.y = side * 0.6;
     hand.add(thumb);
     arm.add(hand);
     return arm;
 }
 const leftArm = createArm(-1);
 const rightArm = createArm(1);
-body.add(leftArm);
-body.add(rightArm);
+torso.add(leftArm);
+torso.add(rightArm);
 
-// LEGS
+// ============ HIPS + LEGS ============
+const hips = new THREE.Group();
+hips.position.y = 0.32;
+sasha.add(hips);
+
+const hipPts = [
+    [0.20, 0.0],
+    [0.265, 0.04],
+    [0.28, 0.10],
+    [0.24, 0.16],
+    [0.135, 0.19],
+];
+const hipProfile = hipPts.map(p => new THREE.Vector2(p[0], p[1]));
+const hipGeo = new THREE.LatheGeometry(hipProfile, 32);
+const hipMesh = new THREE.Mesh(hipGeo, skinMat);
+hips.add(hipMesh);
+hips.add(new THREE.Mesh(hipGeo.clone(), wireHolo));
+
 function createLeg(side) {
     const leg = new THREE.Group();
-    leg.position.set(side * 0.09, -0.1, 0);
+    leg.position.set(side * 0.105, 0.12, 0);
     // Thigh
-    const thighGeo = new THREE.CylinderGeometry(0.06, 0.045, 0.8, 10);
-    const thigh = new THREE.Mesh(thighGeo, holomat(0x00bfff, 0.38));
-    thigh.position.y = -0.45;
+    const thigh = limb(0.06, 0.05, 0.5, skinSoft);
+    thigh.position.y = -0.28;
+    thigh.rotation.x = side * 0.01;
     leg.add(thigh);
     // Knee
-    const knee = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 10), holomat(0x00bfff, 0.4));
-    knee.position.y = -0.85;
+    const knee = joint(0.055, skinSoft);
+    knee.position.y = -0.55;
     leg.add(knee);
     // Shin
-    const shinGeo = new THREE.CylinderGeometry(0.045, 0.03, 0.7, 10);
-    const shin = new THREE.Mesh(shinGeo, holomat(0x00bfff, 0.35));
-    shin.position.y = -1.2;
+    const shin = limb(0.04, 0.032, 0.42, skinSoft);
+    shin.position.y = -0.78;
     leg.add(shin);
     // Ankle
-    const ankle = new THREE.Mesh(new THREE.SphereGeometry(0.032, 10, 10), holomat(0x00bfff, 0.45));
-    ankle.position.y = -1.55;
+    const ankle = joint(0.032, skinSoft);
+    ankle.position.y = -1.0;
     leg.add(ankle);
     // Foot
-    const footGeo = new THREE.BoxGeometry(0.07, 0.05, 0.16);
-    const foot = new THREE.Mesh(footGeo, holomat(0x00bfff, 0.4));
-    foot.position.set(0, -1.6, 0.06);
+    const footGeo = new THREE.SphereGeometry(0.045, 12, 10);
+    const foot = new THREE.Mesh(footGeo, skinSoft);
+    foot.scale.set(1.0, 0.6, 1.8);
+    foot.position.set(0, -1.05, 0.05);
     leg.add(foot);
     return leg;
 }
 const leftLeg = createLeg(-1);
 const rightLeg = createLeg(1);
-body.add(leftLeg);
-body.add(rightLeg);
+hips.add(leftLeg);
+hips.add(rightLeg);
 
-// Body idle sway + arm/leg idle animation (handled in animate loop)
+// ============ BASE RING + PARTICLES ============
+const baseRing = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.006, 8, 48),
+    new THREE.MeshBasicMaterial({ color: 0x9ee6ff, transparent: true, opacity: 0.3 }));
+baseRing.position.y = -1.24;
+baseRing.rotation.x = Math.PI / 2;
+scene.add(baseRing);
 
-// Orbital rings
-const ringMat1 = new THREE.MeshBasicMaterial({ color: 0x00bfff, transparent: true, opacity: 0.25 });
-const ring1 = new THREE.Mesh(new THREE.TorusGeometry(1.1, 0.005, 8, 64), ringMat1);
-scene.add(ring1);
-const ring2 = new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.004, 8, 64), new THREE.MeshBasicMaterial({ color: 0x8b5cf6, transparent: true, opacity: 0.18 }));
-scene.add(ring2);
-const ring3 = new THREE.Mesh(new THREE.TorusGeometry(1.4, 0.003, 8, 64), new THREE.MeshBasicMaterial({ color: 0x00bfff, transparent: true, opacity: 0.12 }));
-scene.add(ring3);
-
-// Particles
-const pCount = 150;
+const pCount = 130;
 const pGeo = new THREE.BufferGeometry();
 const pPos = new Float32Array(pCount * 3);
 const pSpeed = new Float32Array(pCount);
 for (let i = 0; i < pCount; i++) {
     const th = Math.random() * Math.PI * 2;
     const ph = Math.random() * Math.PI;
-    const r = 1.2 + Math.random() * 2;
+    const r = 1.0 + Math.random() * 2;
     pPos[i*3] = r * Math.sin(ph) * Math.cos(th);
-    pPos[i*3+1] = r * Math.sin(ph) * Math.sin(th);
-    pPos[i*3+2] = r * Math.cos(ph);
-    pSpeed[i] = 0.002 + Math.random() * 0.006;
+    pPos[i*3+1] = r * Math.cos(ph) * 0.9;
+    pPos[i*3+2] = r * Math.sin(ph) * Math.sin(th);
+    pSpeed[i] = 0.002 + Math.random() * 0.005;
 }
 pGeo.setAttribute('position', new THREE.Float32BufferAttribute(pPos, 3));
-const particles = new THREE.Points(pGeo, new THREE.PointsMaterial({ color: 0x00bfff, size: 0.015, transparent: true, opacity: 0.5 }));
+const particles = new THREE.Points(pGeo,
+    new THREE.PointsMaterial({ color: 0x9ee6ff, size: 0.014, transparent: true, opacity: 0.45 }));
 scene.add(particles);
 
+// ============ STATE MACHINE ============
 let state = 'idle';
 let t = 0;
 window.setState = function(s) { state = s; };
 
-// View control: 'face' (default, close up) or 'full' (full body, screen height)
 window.setView = function(v) {
     if (v === 'full') {
-        camera.position.set(0, -0.15, 5.6);
+        camera.position.set(0, -0.15, 4.9);
         camera.lookAt(0, -0.35, 0);
     } else {
-        camera.position.set(0, 0.3, 3.2);
-        camera.lookAt(0, 0.1, 0);
+        camera.position.set(0, 0.35, 3.6);
+        camera.lookAt(0, -0.15, 0);
     }
 };
 
-// Walking animation control
 let walking = false;
 window.setWalking = function(w) { walking = w; };
-
-// Body sway references
-const bodyGroups = { leftArm, rightArm, leftLeg, rightLeg, body, torso };
 
 function animate() {
     requestAnimationFrame(animate);
     t += 0.016;
 
-    head.position.y = Math.sin(t * 1.2) * 0.015;
-    body.position.x = Math.sin(t * 0.8) * 0.02;
-    body.rotation.y = Math.sin(t * 0.5) * 0.03;
-
-    ring1.rotation.x = t * 0.2;
-    ring1.rotation.y = t * 0.15;
-    ring2.rotation.x = -t * 0.15;
-    ring2.rotation.z = t * 0.1;
-    ring3.rotation.y = t * 0.08;
-    ring3.rotation.z = -t * 0.12;
+    baseRing.rotation.z = t * 0.3;
+    baseRing.scale.x = 1 + Math.sin(t * 1.5) * 0.03;
 
     const pp = particles.geometry.attributes.position.array;
     for (let i = 0; i < pCount; i++) {
         pp[i*3+1] += pSpeed[i];
-        if (pp[i*3+1] > 3) { pp[i*3+1] = -3; const th = Math.random()*Math.PI*2; pp[i*3] = Math.cos(th)*(1.2+Math.random()*2); pp[i*3+2] = Math.sin(th)*(1.2+Math.random()*2); }
+        if (pp[i*3+1] > 2.4) { pp[i*3+1] = -2.4; const th = Math.random()*Math.PI*2; pp[i*3] = Math.cos(th)*(1.0+Math.random()*2); pp[i*3+2] = Math.sin(th)*(1.0+Math.random()*2); }
     }
     particles.geometry.attributes.position.needsUpdate = true;
 
-    const blink = Math.sin(t * 0.7) > 0.98;
+    const blink = Math.sin(t * 0.8) > 0.985;
+    const breath = Math.sin(t * 1.3) * 0.012;
 
-    // Body animation based on state
-    const walkSwing = Math.sin(t * 8) * 0.18;
-    const idleSwing = Math.sin(t * 1.5) * 0.03;
+    // Body idle
+    sasha.position.y = Math.sin(t * 1.1) * 0.02;
+    sasha.rotation.y = Math.sin(t * 0.35) * 0.05;
+    torso.scale.y = 1 + breath;
+    torso.scale.x = 1 - breath * 0.6;
+    head.rotation.z = Math.sin(t * 0.5) * 0.03;
 
+    // Walking gait
     if (walking) {
-        leftArm.rotation.z = -0.12 + walkSwing * 0.8;
-        rightArm.rotation.z = 0.12 - walkSwing * 0.8;
-        leftArm.position.y = 1.15 + Math.sin(t * 8) * 0.03;
-        rightArm.position.y = 1.15 - Math.sin(t * 8) * 0.03;
-        leftLeg.rotation.x = walkSwing;
-        rightLeg.rotation.x = -walkSwing;
-        body.rotation.x = Math.sin(t * 8) * 0.02;
-        head.position.y = Math.sin(t * 16) * 0.01;
+        const walk = Math.sin(t * 9);
+        const step = Math.sin(t * 9);
+        leftLeg.rotation.x = step * 0.5;
+        rightLeg.rotation.x = -step * 0.5;
+        leftArm.rotation.x = -step * 0.35;
+        rightArm.rotation.x = step * 0.35;
+        leftArm.rotation.z = -0.08 + walk * 0.06;
+        rightArm.rotation.z = 0.08 - walk * 0.06;
+        hips.rotation.x = Math.sin(t * 9) * 0.05;
+        sasha.position.y = Math.abs(Math.cos(t * 9)) * 0.04;
+        torso.rotation.y = walk * 0.04;
+        head.rotation.y = walk * 0.03;
+        head.rotation.x = Math.sin(t * 9) * 0.02;
     } else {
-        leftArm.rotation.z = -0.12 + idleSwing;
-        rightArm.rotation.z = 0.12 - idleSwing;
-        leftArm.position.y = 1.15;
-        rightArm.position.y = 1.15;
-        leftLeg.rotation.x = Math.sin(t * 1.2) * 0.04;
-        rightLeg.rotation.x = -Math.sin(t * 1.2) * 0.04;
-        body.rotation.x = Math.sin(t * 1.2) * 0.01;
+        leftLeg.rotation.x = Math.sin(t * 1.2) * 0.03;
+        rightLeg.rotation.x = -Math.sin(t * 1.2) * 0.03;
+        leftArm.rotation.x = Math.sin(t * 1.1) * 0.02;
+        rightArm.rotation.x = -Math.sin(t * 1.1) * 0.02;
+        leftArm.rotation.z = -0.08;
+        rightArm.rotation.z = 0.08;
+        hips.rotation.x = 0;
+        torso.rotation.y = 0;
+        head.rotation.x = 0;
     }
 
+    // Speaking - mouth + face
     if (state === 'speaking') {
-        // Mouth animation
-        mouth.scale.y = 1 + Math.abs(Math.sin(t * 14)) * 3;
-        mouth.scale.x = 1 + Math.sin(t * 10) * 0.2;
-        mouthMat.opacity = 0.7;
-        upperLip.position.y = -0.1 + Math.sin(t * 14) * 0.015;
-        lowerLip.position.y = -0.1 - Math.abs(Math.sin(t * 14)) * 0.02;
-
-        // Eye expressions
-        leftEye.iris.color.setHex(0x00ffff);
-        rightEye.iris.color.setHex(0x00ffff);
-        leftEye.glow.opacity = 0.3 + Math.sin(t * 6) * 0.15;
-        rightEye.glow.opacity = 0.3 + Math.sin(t * 6) * 0.15;
-
-        // Brows animate
-        leftBrow.mesh.position.y = 0.42 + Math.sin(t * 3) * 0.01;
-        rightBrow.mesh.position.y = 0.42 - Math.sin(t * 3) * 0.01;
-
-        light1.intensity = 1.8 + Math.sin(t * 8) * 0.4;
-        wireMat.opacity = 0.2 + Math.sin(t * 4) * 0.08;
-    } else if (state === 'thinking') {
-        mouth.scale.y = 1;
-        mouth.scale.x = 1;
-        mouthMat.opacity = 0.4;
-        upperLip.position.y = -0.1;
-        lowerLip.position.y = -0.1;
-
-        leftEye.iris.color.setHex(0x8b5cf6);
-        rightEye.iris.color.setHex(0x8b5cf6);
-        leftEye.glow.opacity = 0.25 + Math.sin(t * 2) * 0.1;
-        rightEye.glow.opacity = 0.25 + Math.sin(t * 2) * 0.1;
-
-        leftBrow.mesh.position.y = 0.44;
-        rightBrow.mesh.position.y = 0.44;
-        leftBrow.mesh.rotation.z = 0.15;
-        rightBrow.mesh.rotation.z = -0.15;
-
-        head.rotation.y = Math.sin(t * 0.6) * 0.12;
-        light1.intensity = 1.5 + Math.sin(t * 2) * 0.3;
-        wireMat.opacity = 0.15 + Math.sin(t * 1.5) * 0.05;
+        const o = Math.abs(Math.sin(t * 13)) * 0.5 + 0.1;
+        mouthOpen.scale.y = o;
+        mouthOpen.scale.z = 0.4 + o * 0.5;
+        lowerLip.position.y = -0.215 - o * 0.012;
+        upperLip.position.y = -0.185 + o * 0.008;
+        head.rotation.z = Math.sin(t * 5) * 0.04;
+        leftEye.scale.y = 1 + Math.sin(t * 6) * 0.05;
+        rightEye.scale.y = 1 - Math.sin(t * 6) * 0.05;
     } else {
-        // Idle - subtle breathing, slow blink
-        mouth.scale.y = 1 + Math.sin(t * 0.4) * 0.08;
-        mouth.scale.x = 1;
-        mouthMat.opacity = 0.45;
-        upperLip.position.y = -0.1;
-        lowerLip.position.y = -0.1;
-
-        leftEye.iris.color.setHex(0x00bfff);
-        rightEye.iris.color.setHex(0x00bfff);
-        leftEye.glow.opacity = 0.18 + Math.sin(t * 1) * 0.08;
-        rightEye.glow.opacity = 0.18 + Math.sin(t * 1) * 0.08;
-
-        leftBrow.mesh.position.y = 0.42;
-        rightBrow.mesh.position.y = 0.42;
-        leftBrow.mesh.rotation.z = 0;
-        rightBrow.mesh.rotation.z = 0;
-
-        head.rotation.y = Math.sin(t * 0.25) * 0.04;
-        light1.intensity = 1.8;
-        wireMat.opacity = 0.15 + Math.sin(t * 0.6) * 0.03;
-
-        // Blink
-        if (blink) {
-            leftEye.glow.opacity = 0.05;
-            rightEye.glow.opacity = 0.05;
-        }
+        mouthOpen.scale.y = 0.2;
+        mouthOpen.scale.z = 0.6;
+        lowerLip.position.y = -0.215;
+        upperLip.position.y = -0.185;
+        leftEye.scale.y = 1;
+        rightEye.scale.y = 1;
     }
+
+    // Thinking - brows knit, eyes up
+    if (state === 'thinking') {
+        head.rotation.y = Math.sin(t * 0.6) * 0.14;
+        head.rotation.x = Math.sin(t * 0.4) * 0.04;
+        leftEye.position.y = 0.09 + Math.sin(t * 0.3) * 0.004;
+        rightEye.position.y = 0.09 + Math.sin(t * 0.3) * 0.004;
+        sasha.rotation.y = Math.sin(t * 0.6) * 0.08;
+    } else {
+        leftEye.position.y = 0.09;
+        rightEye.position.y = 0.09;
+    }
+
+    // Blink
+    if (blink && state !== 'speaking') {
+        leftEye.scale.y = 0.05;
+        rightEye.scale.y = 0.05;
+        setTimeout(() => {
+            leftEye.scale.y = 1;
+            rightEye.scale.y = 1;
+        }, 90);
+    }
+
+    // Lash/wire glow pulse
+    wireHolo.opacity = 0.08 + Math.sin(t * 1.2) * 0.03;
+    baseRing.material.opacity = 0.25 + Math.sin(t * 2) * 0.08;
 
     renderer.render(scene, camera);
 }
