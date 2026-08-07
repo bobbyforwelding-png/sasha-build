@@ -1,6 +1,7 @@
 package com.example.presentation.ui
 
 import android.annotation.SuppressLint
+import android.view.View
 import android.view.ViewGroup
 import android.webkit.*
 import androidx.compose.animation.core.*
@@ -51,11 +52,17 @@ fun SashaAvatar3D(
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
                     settings.javaScriptEnabled = true
+                    settings.allowFileAccess = true
+                    settings.allowContentAccess = true
+                    settings.allowFileAccessFromFileURLs = true
+                    settings.allowUniversalAccessFromFileURLs = true
                     settings.domStorageEnabled = true
                     settings.loadWithOverviewMode = true
                     settings.useWideViewPort = true
                     settings.setSupportZoom(false)
+                    settings.mediaPlaybackRequiresUserGesture = false
                     setBackgroundColor(0x00000000)
+                    setLayerType(View.LAYER_TYPE_HARDWARE, null)
 
                     webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean = false

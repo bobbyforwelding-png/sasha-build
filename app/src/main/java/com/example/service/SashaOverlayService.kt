@@ -96,6 +96,9 @@ class SashaOverlayService : Service() {
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.allowFileAccess = true
+            settings.allowContentAccess = true
+            settings.allowFileAccessFromFileURLs = true
+            settings.allowUniversalAccessFromFileURLs = true
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
             @Suppress("DEPRECATION")
