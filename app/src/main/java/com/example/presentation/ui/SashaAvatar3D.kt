@@ -37,6 +37,7 @@ fun SashaAvatar3D(
 ) {
     var currentState by remember { mutableStateOf("idle") }
     val currentAvatarUrl = avatarUrl?.trim().takeUnless { it.isNullOrEmpty() }
+    var useImageAvatar by remember(currentAvatarUrl) { mutableStateOf(currentAvatarUrl != null) }
 
     LaunchedEffect(isSpeaking, isThinking) {
         currentState = when {
@@ -47,12 +48,14 @@ fun SashaAvatar3D(
     }
 
     Box(modifier = modifier.background(Color.Transparent), contentAlignment = Alignment.Center) {
-        if (currentAvatarUrl != null) {
+        if (currentAvatarUrl != null && useImageAvatar) {
             AsyncImage(
                 model = currentAvatarUrl,
                 contentDescription = "SASHA avatar",
                 modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Crop,
+                onError = { useImageAvatar = false },
+                onSuccess = { useImageAvatar = true }
             )
         } else {
             AndroidView(
