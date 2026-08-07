@@ -409,6 +409,11 @@ fun CodexScreen(viewModel: VaultViewModel) {
 }
 
 @Composable
+fun PrivateCodexEditor(viewModel: VaultViewModel) {
+    CodexScreen(viewModel)
+}
+
+@Composable
 fun ProjectsScreen(viewModel: VaultViewModel) {
     val neonCyan = Color(0xFF00E5FF)
     val darkBg = Color(0xFF0A0A0F)
