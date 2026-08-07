@@ -26,7 +26,7 @@ class UpdateChecker(private val context: Context) {
 
     companion object {
         private const val UPDATE_CHECK_URL = "https://nicebros.ai/api/updates/sasha"
-        private const val CURRENT_VERSION_CODE = 13
+        private const val CURRENT_VERSION_CODE = 20
     }
 
     suspend fun checkForUpdate(): UpdateInfo? = withContext(Dispatchers.IO) {
