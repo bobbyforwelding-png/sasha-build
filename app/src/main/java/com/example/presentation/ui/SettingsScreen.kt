@@ -21,6 +21,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.launch
 
 private val NeonCyan = Color(0xFF00E5FF)
 private val NeonPurple = Color(0xFF8B5CF6)
@@ -52,8 +54,25 @@ fun SettingsScreen(onClose: () -> Unit) {
     var showDebug by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    fun showComingSoon(feature: String) {
+        scope.launch { snackbarHostState.showSnackbar("$feature — coming soon") }
+    }
 
-    Box(modifier = Modifier.fillMaxSize().background(DarkBg)) {
+    Scaffold(
+        containerColor = DarkBg,
+        snackbarHost = {
+            SnackbarHost(snackbarHostState) { data ->
+                Snackbar(
+                    snackbarData = data,
+                    containerColor = DarkCard,
+                    contentColor = NeonCyan
+                )
+            }
+        }
+    ) { innerPadding ->
+    Box(modifier = Modifier.fillMaxSize().background(DarkBg).padding(innerPadding)) {
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -141,7 +160,8 @@ fun SettingsScreen(onClose: () -> Unit) {
                     subtitle = "Manage saved chats, export, backup",
                     icon = Icons.Filled.ChatBubble,
                     color = NeonCyan,
-                    onClick = { }
+                    comingSoon = true,
+                    onClick = { showComingSoon("Conversation History") }
                 )
             }
             item {
@@ -150,7 +170,8 @@ fun SettingsScreen(onClose: () -> Unit) {
                     subtitle = "How much history to remember, context window",
                     icon = Icons.Filled.Memory,
                     color = NeonPurple,
-                    onClick = { }
+                    comingSoon = true,
+                    onClick = { showComingSoon("Memory & Context") }
                 )
             }
 
@@ -162,7 +183,8 @@ fun SettingsScreen(onClose: () -> Unit) {
                     subtitle = "Contacts, SMS, phone, camera, files",
                     icon = Icons.Filled.Apps,
                     color = NeonGreen,
-                    onClick = { }
+                    comingSoon = true,
+                    onClick = { showComingSoon("Device Permissions") }
                 )
             }
             item {
@@ -217,7 +239,8 @@ fun SettingsScreen(onClose: () -> Unit) {
                     subtitle = "Love the app? Tell the world.",
                     icon = Icons.Filled.Star,
                     color = Color(0xFFFFD700),
-                    onClick = { }
+                    comingSoon = true,
+                    onClick = { showComingSoon("Rate Sasha") }
                 )
             }
 
@@ -302,6 +325,7 @@ fun SettingsScreen(onClose: () -> Unit) {
         SettingsToggleRow("Chat stuck?", "The app auto-recovers from API errors. Try sending again.", Color(0xFFFFAA00))
         SettingsToggleRow("App slow?", "Close other apps. The tablet has limited RAM.", Color(0xFFFFAA00))
     }
+    } // end Scaffold
 }
 
 @Composable
@@ -323,25 +347,31 @@ private fun SettingsCard(
     subtitle: String,
     icon: ImageVector,
     color: Color,
+    comingSoon: Boolean = false,
     onClick: () -> Unit
 ) {
+    val cardAlpha = if (comingSoon) 0.45f else 1f
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(DarkCard)
+            .background(DarkCard.copy(alpha = cardAlpha))
             .border(1.dp, DarkBorder, RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
+        Icon(icon, contentDescription = null, tint = color.copy(alpha = cardAlpha), modifier = Modifier.size(22.dp))
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, color = TextPrimary, fontFamily = FontFamily.Monospace, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            Text(subtitle, color = TextSecondary, fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+            Text(title, color = TextPrimary.copy(alpha = cardAlpha), fontFamily = FontFamily.Monospace, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Text(subtitle, color = TextSecondary.copy(alpha = cardAlpha), fontFamily = FontFamily.Monospace, fontSize = 10.sp)
         }
-        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(18.dp))
+        if (comingSoon) {
+            Text("SOON", color = TextSecondary.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 9.sp)
+        } else {
+            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(18.dp))
+        }
     }
 }
 
