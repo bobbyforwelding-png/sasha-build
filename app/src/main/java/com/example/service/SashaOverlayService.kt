@@ -89,6 +89,10 @@ class SashaOverlayService : Service() {
         val screenWidth = metrics.widthPixels
         val screenHeight = metrics.heightPixels
 
+        // Compact portrait panel: ~38% of screen width, ~45% of height, anchored bottom-right
+        val overlayWidth = (screenWidth * 0.38).toInt()
+        val overlayHeight = (screenHeight * 0.45).toInt()
+
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.allowFileAccess = true
@@ -99,31 +103,28 @@ class SashaOverlayService : Service() {
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
-                    loadUrl("javascript:(function(){ if(window.setView) setView('full'); if(window.setWalking) setWalking(true); })()")
-                    handler.postDelayed({
-                        loadUrl("javascript:(function(){ if(window.setWalking) setWalking(false); if(window.setState) setState('idle'); })()")
-                    }, 2200)
+                    // Head/shoulders default view — no walk-in on compact overlay
+                    loadUrl("javascript:(function(){ if(window.setView) setView('portrait'); if(window.setState) setState('idle'); })()")
                 }
             }
             loadUrl("file:///android_asset/avatar.html")
         }
 
         params = WindowManager.LayoutParams(
-            screenWidth,
-            screenHeight,
+            overlayWidth,
+            overlayHeight,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             else
                 @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = 0
-            y = 0
+            gravity = Gravity.BOTTOM or Gravity.END
+            x = (16 * metrics.density).toInt()
+            y = (80 * metrics.density).toInt()
         }
 
         val container = FrameLayout(this).apply {
@@ -136,7 +137,10 @@ class SashaOverlayService : Service() {
         overlayView = container
 
         wm.addView(container, params)
-        container.addView(webView, FrameLayout.LayoutParams(screenWidth, screenHeight))
+        container.addView(webView, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ))
     }
 
     private var touchStartX = 0
