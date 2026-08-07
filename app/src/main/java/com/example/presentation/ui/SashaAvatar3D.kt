@@ -54,8 +54,7 @@ fun SashaAvatar3D(
                 contentDescription = "SASHA avatar",
                 modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(8.dp)),
                 contentScale = ContentScale.Crop,
-                onError = { useImageAvatar = false },
-                onSuccess = { useImageAvatar = true }
+                onError = { useImageAvatar = false }
             )
         } else {
             AndroidView(

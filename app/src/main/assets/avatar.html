@@ -196,7 +196,7 @@ function loadHumanModel() {
 
   const loader = new THREE.GLTFLoader();
   loader.load(
-    'file:///android_asset/models/CesiumMan.glb',
+    'models/CesiumMan.glb',
     (gltf) => {
       model = gltf.scene;
       model.scale.set(1.45, 1.45, 1.45);
