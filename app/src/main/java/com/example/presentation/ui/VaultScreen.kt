@@ -133,6 +133,12 @@ private val SASHA_VAULT_OVERRIDE = """
 }
 """.trimIndent()
 
+private val SASHA_VAULT_AND_CONSOLE_PROFILE = """
+$SASHA_IDENTITY_PROFILE
+
+$SASHA_VAULT_OVERRIDE
+""".trimIndent()
+
 @Composable
 fun SashaIdentityCard(title: String, body: String, accent: Color) {
     val darkSurface = Color(0xFF111118)
@@ -251,7 +257,7 @@ fun ConsoleScreen(viewModel: VaultViewModel) {
     Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
         SashaIdentityCard(
             title = "WHO SASHA IS",
-            body = SASHA_IDENTITY_PROFILE,
+            body = SASHA_VAULT_AND_CONSOLE_PROFILE,
             accent = neonCyan
         )
         Spacer(modifier = Modifier.height(8.dp))
@@ -1513,7 +1519,7 @@ fun VaultTerminalScreen(viewModel: VaultViewModel) {
         ) {
             SashaIdentityCard(
                 title = "WHO SASHA IS — VAULT OVERRIDE",
-                body = SASHA_VAULT_OVERRIDE,
+                body = SASHA_VAULT_AND_CONSOLE_PROFILE,
                 accent = neonCyan
             )
             Spacer(modifier = Modifier.height(14.dp))
@@ -1557,7 +1563,7 @@ fun VaultTerminalScreen(viewModel: VaultViewModel) {
         Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
             SashaIdentityCard(
                 title = "WHO SASHA IS — VAULT OVERRIDE",
-                body = SASHA_VAULT_OVERRIDE,
+                body = SASHA_VAULT_AND_CONSOLE_PROFILE,
                 accent = neonCyan
             )
             Spacer(modifier = Modifier.height(8.dp))
