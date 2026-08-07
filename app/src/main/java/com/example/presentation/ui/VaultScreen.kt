@@ -1218,6 +1218,7 @@ fun MainVaultDashboard(
     onStopOverlay: (() -> Unit)? = null,
     overlayRunning: Boolean = false
 ) {
+    var activeSection by remember { mutableStateOf("SASHA") }
     var activePage by remember { mutableStateOf("CONSOLE") }
     var showSettings by remember { mutableStateOf(false) }
     val neonCyan = Color(0xFF00E5FF)
@@ -1229,90 +1230,7 @@ fun MainVaultDashboard(
     Box(modifier = Modifier.fillMaxSize().background(darkBg)) {
         FlamesSkullsWatermark()
         Column(modifier = Modifier.fillMaxSize().padding(8.dp).windowInsetsPadding(WindowInsets.safeDrawing)) {
-            // 3D Avatar with thick gunmetal brushed shell
-            Box(
-                modifier = Modifier.fillMaxWidth().height(180.dp)
-                    .gunmetalBorder(4.dp, 12.dp)
-                    .background(darkSurface, RoundedCornerShape(12.dp))
-                    .padding(4.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                SashaHologramAvatar(
-                    state = when {
-                        viewModel.isSpeaking -> AvatarState.SPEAKING
-                        viewModel.isLoading -> AvatarState.THINKING
-                        else -> AvatarState.IDLE
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                    primaryColor = Color(0xFF00BFFF),
-                    accentColor = Color(0xFF8B5CF6),
-                    glowColor = Color(0xFF00BFFF)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
-            ) {
-                val overlayButtonColor = if (overlayRunning) neonCyan else neonPurple
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(overlayButtonColor.copy(alpha = 0.15f))
-                        .border(1.dp, overlayButtonColor.copy(alpha = 0.6f), RoundedCornerShape(20.dp))
-                        .clickable {
-                            if (overlayRunning) {
-                                onStopOverlay?.invoke()
-                            } else {
-                                onRequestOverlay?.invoke()
-                            }
-                        }
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = if (overlayRunning) "● SASHA IS WITH YOU — TAP TO DISMISS" else "LET SASHA OUT — SHE WALKS OVER EVERY APP",
-                        color = overlayButtonColor,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Status bar
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(modifier = Modifier.size(6.dp).background(neonCyan, RoundedCornerShape(50)))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    if (viewModel.isLoading) "SASHA PROCESSING..." else "SASHA ONLINE",
-                    color = if (viewModel.isLoading) Color(0xFFFBBF24) else neonCyan,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    "SASHA TRADING SYSTEM",
-                    color = Color(0xFF555577),
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 9.sp
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                IconButton(onClick = { showSettings = true }, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = neonCyan, modifier = Modifier.size(16.dp))
-                }
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Tab bar with gunmetal shell
+            // SECTION SWITCHER — Sasha Prime by itself / Console + Vault together
             Row(
                 modifier = Modifier.fillMaxWidth()
                     .gunmetalBorder(3.dp, 10.dp)
@@ -1320,30 +1238,164 @@ fun MainVaultDashboard(
                     .padding(4.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                CyberTab("CONSOLE", activePage == "CONSOLE", neonCyan) { activePage = "CONSOLE" }
-                CyberTab("CODEX", activePage == "CODEX", neonCyan) { activePage = "CODEX" }
-                CyberTab("PROJECTS", activePage == "PROJECTS", neonCyan) { activePage = "PROJECTS" }
-                CyberTab("VAULT", activePage == "VAULT", neonCyan) { activePage = "VAULT" }
-                CyberTab("GO LIVE", activePage == "GO LIVE", Color(0xFFFF2D55)) { activePage = "GO LIVE" }
+                CyberTab("SASHA PRIME", activeSection == "SASHA", neonCyan) { activeSection = "SASHA" }
+                CyberTab("CONSOLE + VAULT", activeSection == "SYSTEM", neonPurple) { activeSection = "SYSTEM" }
             }
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Content area with thick gunmetal shell + flames/skulls watermark
-            Box(
-                modifier = Modifier.weight(1f)
-                    .gunmetalBorder(4.dp, 12.dp)
-                    .background(darkCard, RoundedCornerShape(12.dp))
-                    .clip(RoundedCornerShape(12.dp))
-                    .padding(4.dp)
-            ) {
-                FlamesSkullsWatermark()
-                when (activePage) {
-                    "CONSOLE" -> ConsoleScreen(viewModel)
-                    "CODEX" -> CodexScreen(viewModel)
-                    "PROJECTS" -> ProjectsScreen(viewModel)
-                    "VAULT" -> VaultTerminalScreen(viewModel)
-                    "GO LIVE" -> GoLiveScreen(viewModel)
+            if (activeSection == "SASHA") {
+                // ─── SECTION 1: SASHA PRIME — Node_01, her persona, her attitude, her console by itself ───
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Her — front and center, filling the top of the screen
+                    Box(
+                        modifier = Modifier.fillMaxWidth().weight(1.1f)
+                            .gunmetalBorder(4.dp, 12.dp)
+                            .background(darkSurface, RoundedCornerShape(12.dp))
+                            .padding(4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        SashaAvatar3D(
+                            isSpeaking = viewModel.isSpeaking,
+                            isThinking = viewModel.isLoading,
+                            avatarUrl = viewModel.avatarUrl,
+                            modifier = Modifier.fillMaxSize(),
+                            onAvatarUrlChange = { viewModel.saveAvatarUrl(it) }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Persona banner — she announces herself
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(modifier = Modifier.size(8.dp).background(neonCyan, RoundedCornerShape(50)))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            "SASHA PRIME — NODE_01 // MASTER UI & LEAD COLLABORATOR",
+                            color = neonCyan,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = { showSettings = true }, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = neonCyan, modifier = Modifier.size(16.dp))
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // Walk-out button
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        val overlayButtonColor = if (overlayRunning) neonCyan else neonPurple
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(overlayButtonColor.copy(alpha = 0.15f))
+                                .border(1.dp, overlayButtonColor.copy(alpha = 0.6f), RoundedCornerShape(20.dp))
+                                .clickable {
+                                    if (overlayRunning) {
+                                        onStopOverlay?.invoke()
+                                    } else {
+                                        onRequestOverlay?.invoke()
+                                    }
+                                }
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = if (overlayRunning) "● SASHA IS WITH YOU — TAP TO DISMISS" else "LET SASHA OUT — SHE WALKS OVER EVERY APP",
+                                color = overlayButtonColor,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Her console — by itself, nothing else in the way
+                    Box(
+                        modifier = Modifier.weight(1f).fillMaxWidth()
+                            .gunmetalBorder(4.dp, 12.dp)
+                            .background(darkCard, RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(12.dp))
+                            .padding(4.dp)
+                    ) {
+                        FlamesSkullsWatermark()
+                        ConsoleScreen(viewModel)
+                    }
+                }
+            } else {
+                // ─── SECTION 2: CONSOLE + VAULT — Nodes 01 & 02, the working stack ───
+                // Status bar
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(modifier = Modifier.size(6.dp).background(neonCyan, RoundedCornerShape(50)))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        if (viewModel.isLoading) "SASHA PROCESSING..." else "SASHA ONLINE",
+                        color = if (viewModel.isLoading) Color(0xFFFBBF24) else neonCyan,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        "SASHA TRADING SYSTEM",
+                        color = Color(0xFF555577),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 9.sp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    IconButton(onClick = { showSettings = true }, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = neonCyan, modifier = Modifier.size(16.dp))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Tab bar with gunmetal shell
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .gunmetalBorder(3.dp, 10.dp)
+                        .background(darkSurface, RoundedCornerShape(10.dp))
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    CyberTab("CONSOLE", activePage == "CONSOLE", neonCyan) { activePage = "CONSOLE" }
+                    CyberTab("CODEX", activePage == "CODEX", neonCyan) { activePage = "CODEX" }
+                    CyberTab("PROJECTS", activePage == "PROJECTS", neonCyan) { activePage = "PROJECTS" }
+                    CyberTab("VAULT", activePage == "VAULT", neonPurple) { activePage = "VAULT" }
+                    CyberTab("GO LIVE", activePage == "GO LIVE", Color(0xFFFF2D55)) { activePage = "GO LIVE" }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Content area with thick gunmetal shell + flames/skulls watermark
+                Box(
+                    modifier = Modifier.weight(1f)
+                        .gunmetalBorder(4.dp, 12.dp)
+                        .background(darkCard, RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(12.dp))
+                        .padding(4.dp)
+                ) {
+                    FlamesSkullsWatermark()
+                    when (activePage) {
+                        "CONSOLE" -> ConsoleScreen(viewModel)
+                        "CODEX" -> CodexScreen(viewModel)
+                        "PROJECTS" -> ProjectsScreen(viewModel)
+                        "VAULT" -> VaultTerminalScreen(viewModel)
+                        "GO LIVE" -> GoLiveScreen(viewModel)
+                    }
                 }
             }
         }

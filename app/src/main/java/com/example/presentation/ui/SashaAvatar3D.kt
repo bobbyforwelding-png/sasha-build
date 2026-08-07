@@ -58,6 +58,16 @@ fun SashaAvatar3D(
 
                     webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean = false
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            // Full-body framing + walk-in greet once the 3D scene is live
+                            view?.evaluateJavascript("setView('full')", null)
+                            view?.evaluateJavascript("setWalking(true)", null)
+                            view?.evaluateJavascript("setState('$currentState')", null)
+                            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                view?.evaluateJavascript("setWalking(false)", null)
+                                view?.evaluateJavascript("setState('idle')", null)
+                            }, 2200)
+                        }
                     }
 
                     loadUrl("file:///android_asset/avatar.html")
