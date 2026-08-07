@@ -12,8 +12,17 @@
 </head>
 <body>
 <div id="loading">SASHA ONLINE...</div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="three.min.js"></script>
 <script>
+// Guard: if Three.js failed to load, show a fallback instead of a purple blob
+if (typeof THREE === 'undefined') {
+    document.getElementById('loading').textContent = 'SASHA';
+    document.getElementById('loading').style.cssText =
+        'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);' +
+        'color:#c9a06b;font-family:monospace;font-size:22px;font-weight:bold;' +
+        'letter-spacing:4px;z-index:99;text-shadow:0 0 12px #8B5CF6;';
+    throw new Error('Three.js unavailable — avatar fallback active');
+}
 document.getElementById('loading').style.display='none';
 
 const W = window.innerWidth, H = window.innerHeight;
@@ -100,7 +109,7 @@ const dressMat = new THREE.MeshPhongMaterial({
     shininess: 40,
     side: THREE.DoubleSide
 });
-const glowMat = new THREE.MeshBasicMaterial({ color: 0x8B5CF6, transparent: true, opacity: 0.35 });
+const glowMat = new THREE.MeshBasicMaterial({ color: 0x8B5CF6, transparent: true, opacity: 0.15 });
 
 // ============ HELPERS ============
 function limb(bottom, top, length, mat, seg) {
@@ -312,7 +321,7 @@ shoulder(-1); shoulder(1);
 const clavPts = [new THREE.Vector3(-0.2, 0.06, 0.05), new THREE.Vector3(0, 0.085, 0.075), new THREE.Vector3(0.2, 0.06, 0.05)];
 const clavCurve = new THREE.CatmullRomCurve3(clavPts);
 const clavMesh = new THREE.Mesh(new THREE.TubeGeometry(clavCurve, 14, 0.005, 6, false),
-    new THREE.MeshBasicMaterial({ color: 0x8B5CF6, transparent: true, opacity: 0.25 }));
+    new THREE.MeshBasicMaterial({ color: 0x8B5CF6, transparent: true, opacity: 0.12 }));
 torso.add(clavMesh);
 
 // ============ ARMS ============
