@@ -519,6 +519,11 @@ fun VaultButton(text: String, active: Boolean, color: Color, onClick: () -> Unit
 }
 
 @Composable
+fun PrivateCodexEditor(viewModel: VaultViewModel) {
+    CodexScreen(viewModel)
+}
+
+@Composable
 fun VaultUnrestrictedChat(viewModel: VaultViewModel) {
     val vaultBlue = Color(0xFF00BFFF)
     val context = LocalContext.current
