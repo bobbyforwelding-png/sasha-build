@@ -41,6 +41,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import javax.inject.Inject
+import com.example.update.UpdateChecker
+import com.example.update.UpdateInfo
 
 data class VaultChatMessage(
     val text: String,
@@ -104,6 +106,13 @@ class VaultViewModel @Inject constructor(
     var activePersona by mutableStateOf(ALL_PERSONAS[0])
         private set
 
+    // Update checker
+    private val updateChecker = UpdateChecker(application)
+    var pendingUpdate by mutableStateOf<UpdateInfo?>(null)
+        private set
+
+    fun downloadUpdate(info: UpdateInfo) = updateChecker.downloadUpdate(info)
+
     init {
         val prefs = getApplication<Application>().getSharedPreferences("sasha_vault", Context.MODE_PRIVATE)
         avatarUrl = prefs.getString("avatar_url", null)
@@ -113,6 +122,9 @@ class VaultViewModel @Inject constructor(
             activePersona = ALL_PERSONAS.find { it.id == prefs.getString("active_persona_id", "sasha") } ?: ALL_PERSONAS[0]
         }
         loadData()
+        viewModelScope.launch {
+            pendingUpdate = updateChecker.checkForUpdate()
+        }
     }
 
     fun saveOnboarding(answers: OnboardingAnswers, persona: Persona) {
