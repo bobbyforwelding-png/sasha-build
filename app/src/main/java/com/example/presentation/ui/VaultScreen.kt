@@ -58,8 +58,7 @@ import com.example.presentation.viewmodel.VaultViewModel
 import com.example.presentation.theme.VibrantBlue
 import com.example.presentation.theme.GunmetalGray
 import com.example.presentation.viewmodel.VaultUiState
-import com.example.presentation.viewmodel.VaultChatMessage
-import kotlinx.coroutines.Dispatchers
+import com.example.presentation.viewmodel.VaultChatMessageimport kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -1200,7 +1199,11 @@ fun VaultScreen(
     Box(modifier = Modifier.fillMaxSize().background(GunmetalGray)) {
         WatermarkBackground()
 
-        if (uiState.savedPin == null) {
+        if (!viewModel.onboardingComplete) {
+            OnboardingScreen(onComplete = { answers, persona ->
+                viewModel.saveOnboarding(answers, persona)
+            })
+        } else if (uiState.savedPin == null) {
             SetupPinUI(onPinCreated = { pin -> viewModel.setupPin(pin) })
         } else if (!uiState.isUnlocked) {
             PINEntryGate(viewModel, uiState.loginError)
