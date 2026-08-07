@@ -42,7 +42,7 @@ fun SashaAvatar3D(
         }
     }
 
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+    Box(modifier = modifier.background(Color.Transparent), contentAlignment = Alignment.Center) {
         AndroidView(
             factory = { ctx ->
                 WebView(ctx).apply {
@@ -55,6 +55,7 @@ fun SashaAvatar3D(
                     settings.loadWithOverviewMode = true
                     settings.useWideViewPort = true
                     settings.setSupportZoom(false)
+                    setBackgroundColor(0x00000000)
 
                     webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean = false

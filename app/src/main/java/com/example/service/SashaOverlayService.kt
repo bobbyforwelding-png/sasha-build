@@ -98,6 +98,8 @@ class SashaOverlayService : Service() {
             settings.allowFileAccess = true
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
+            @Suppress("DEPRECATION")
+            settings.setRenderPriority(android.webkit.WebSettings.RenderPriority.HIGH)
             setBackgroundColor(0x00000000)
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
             webViewClient = object : WebViewClient() {
