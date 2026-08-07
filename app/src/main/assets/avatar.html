@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <style>
   * { margin:0; padding:0; }
-  body { background:#000; overflow:hidden; width:100vw; height:100vh; }
-  canvas { display:block; }
+  body { background:transparent; overflow:hidden; width:100vw; height:100vh; }
+  canvas { display:block; background:transparent; }
   #loading { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); color:#c9a06b; font-family:monospace; font-size:12px; z-index:99; }
 </style>
 </head>
@@ -18,9 +18,10 @@ document.getElementById('loading').style.display='none';
 
 const W = window.innerWidth, H = window.innerHeight;
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(35, W/H, 0.1, 100);
-camera.position.set(0, 0.35, 3.6);
-camera.lookAt(0, -0.15, 0);
+// Portrait overlay: narrow FOV, close-up on head/shoulders
+const camera = new THREE.PerspectiveCamera(28, W/H, 0.1, 100);
+camera.position.set(0, 1.72, 1.8);
+camera.lookAt(0, 1.6, 0);
 
 const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
 renderer.setSize(W, H);
@@ -432,11 +433,17 @@ window.setState = function(s) { state = s; };
 
 window.setView = function(v) {
     if (v === 'full') {
-        camera.position.set(0, -0.15, 4.9);
-        camera.lookAt(0, -0.35, 0);
+        // Full body — pull back to see the whole figure
+        camera.position.set(0, 0.8, 3.8);
+        camera.lookAt(0, 0.6, 0);
+    } else if (v === 'portrait') {
+        // Head/shoulders portrait close-up (default overlay mode)
+        camera.position.set(0, 1.72, 1.8);
+        camera.lookAt(0, 1.6, 0);
     } else {
-        camera.position.set(0, 0.35, 3.6);
-        camera.lookAt(0, -0.15, 0);
+        // Fallback — same as portrait
+        camera.position.set(0, 1.72, 1.8);
+        camera.lookAt(0, 1.6, 0);
     }
 };
 
