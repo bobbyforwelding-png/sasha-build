@@ -65,8 +65,6 @@ fun SashaAvatar3D(
                         settings.javaScriptEnabled = true
                         settings.allowFileAccess = true
                         settings.allowContentAccess = true
-                        settings.allowFileAccessFromFileURLs = true
-                        settings.allowUniversalAccessFromFileURLs = true
                         settings.domStorageEnabled = true
                         settings.loadWithOverviewMode = true
                         settings.useWideViewPort = true
