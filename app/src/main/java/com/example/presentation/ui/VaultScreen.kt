@@ -490,7 +490,7 @@ fun VaultChatTerminal(viewModel: VaultViewModel, uiState: VaultUiState) {
                     when (activeVaultTab) {
                         "CHAT" -> VaultUnrestrictedChat(viewModel)
                         "FILES" -> IntelTab(viewModel)
-                        "CODEX" -> PrivateCodexEditor(viewModel)
+                        "CODEX" -> CodexScreen(viewModel)
                         "PROJECTS" -> ProjectsScreen(viewModel)
                         "GO LIVE" -> GoLiveScreen(viewModel)
                     }
