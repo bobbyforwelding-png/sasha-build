@@ -86,9 +86,11 @@ class VaultViewModel @Inject constructor(
     var unlockPin by mutableStateOf("")
     var isVaultContextActive by mutableStateOf(false)
         private set
+    var isAppUnlockedForAccess by mutableStateOf(false)
+        private set
 
     val avatarAccessMode: AvatarAccessMode
-        get() = if (_uiState.value.isUnlocked && isPage4Unlocked && isVaultContextActive) {
+        get() = if (isAppUnlockedForAccess && isPage4Unlocked && isVaultContextActive) {
             AvatarAccessMode.VAULT_UNRESTRICTED
         } else {
             AvatarAccessMode.RESTRICTED
@@ -1528,7 +1530,8 @@ GENERATE THIS VIDEO using the link below.
     }
 
     fun verifyPin() {
-        if (unlockPin.trim() == "0000") {
+        val expectedPin = _uiState.value.savedPin?.trim()
+        if (!expectedPin.isNullOrEmpty() && unlockPin.trim() == expectedPin) {
             isPage4Unlocked = true
         } else {
             isPage4Unlocked = false
@@ -1562,6 +1565,7 @@ GENERATE THIS VIDEO using the link below.
 
     fun unlock(pin: String) {
         val isValid = _uiState.value.savedPin == pin
+        isAppUnlockedForAccess = isValid
         _uiState.update { it.copy(isUnlocked = isValid, loginError = !isValid) }
         if (!isValid) {
             isPage4Unlocked = false
@@ -1570,6 +1574,7 @@ GENERATE THIS VIDEO using the link below.
     }
 
     fun lock() {
+        isAppUnlockedForAccess = false
         isPage4Unlocked = false
         clearVaultUnrestrictedContext()
         _uiState.update { it.copy(isUnlocked = false, loginError = false) }
@@ -1597,6 +1602,7 @@ GENERATE THIS VIDEO using the link below.
     }
 
     fun forceReset() {
+        isAppUnlockedForAccess = false
         isPage4Unlocked = false
         isVaultContextActive = false
         clearVaultUnrestrictedContext()
