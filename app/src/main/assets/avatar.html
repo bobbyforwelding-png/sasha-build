@@ -23,7 +23,6 @@
 <body>
 <div id="loading">LOADING AVATAR...</div>
 <script src="three.min.js"></script>
-<script src="GLTFLoader.js"></script>
 <script>
 if (typeof THREE === 'undefined') {
   document.getElementById('loading').textContent = 'AVATAR OFFLINE';
@@ -71,11 +70,6 @@ scene.add(floorShadow);
 const avatarRoot = new THREE.Group();
 scene.add(avatarRoot);
 
-let model = null;
-let mixer = null;
-let idleAction = null;
-let headBone = null;
-let spineBone = null;
 let portraitCard = null;
 let sideCards = [];
 let state = 'idle';
@@ -108,26 +102,15 @@ window.setWalking = function(w) {
   walking = !!w;
 };
 
-function findBone(root, regex) {
-  let found = null;
-  root.traverse((node) => {
-    if (!found && node.isBone && regex.test(node.name)) {
-      found = node;
-    }
-  });
-  return found;
-}
-
 function createPhotoAvatar() {
   const textureLoader = new THREE.TextureLoader();
-  textureLoader.crossOrigin = 'anonymous';
-  const photoUrls = [
-    'https://i.ibb.co/20g4HX07/Screenshot-20260304-011245-Replika.jpg',
-    'https://i.ibb.co/pjhf7NxM/113865214645403.jpg',
-    'https://i.ibb.co/MD9bPVSc/113853448874834.jpg'
+  const photoPaths = [
+    'photos/photo1.jpg',
+    'photos/photo2.jpg',
+    'photos/photo3.jpg'
   ];
   let loaded = 0;
-  const textures = new Array(photoUrls.length);
+  const textures = new Array(photoPaths.length);
   const fallbackTexture = new THREE.CanvasTexture((() => {
     const c = document.createElement('canvas');
     c.width = 512;
@@ -144,7 +127,7 @@ function createPhotoAvatar() {
 
   function tryBuild() {
     loaded += 1;
-    if (loaded < photoUrls.length) return;
+    if (loaded < photoPaths.length) return;
 
     const portraitTexture = textures[0] || fallbackTexture;
     portraitTexture.encoding = THREE.sRGBEncoding;
@@ -162,9 +145,6 @@ function createPhotoAvatar() {
     portraitCard = new THREE.Mesh(portraitGeometry, portraitMaterial);
     portraitCard.position.set(0, 1.25, 0);
     avatarRoot.add(portraitCard);
-    model = portraitCard;
-    headBone = portraitCard;
-    spineBone = portraitCard;
 
     const sideLeftTex = textures[1] || portraitTexture;
     const sideRightTex = textures[2] || portraitTexture;
@@ -197,9 +177,9 @@ function createPhotoAvatar() {
     sideCards.forEach((card) => avatarRoot.add(card));
   }
 
-  photoUrls.forEach((url, idx) => {
+  photoPaths.forEach((path, idx) => {
     textureLoader.load(
-      url,
+      path,
       (tex) => {
         textures[idx] = tex;
         tryBuild();
@@ -219,51 +199,22 @@ function animate() {
 
   const breath = Math.sin(t * 1.7) * 0.008;
 
-  if (model) {
-    model.position.y = Math.sin(t * 1.3) * 0.015;
-    model.rotation.y = Math.sin(t * 0.45) * 0.045;
-  }
-
-  if (mixer) {
-    const rate = (walking || state === 'speaking') ? 1.05 : (state === 'thinking' ? 0.65 : 0.85);
-    mixer.update(0.016 * rate);
-  }
-
-  if (idleAction) {
-    idleAction.paused = false;
-    idleAction.setEffectiveWeight(1.0);
-  }
-
   if (portraitCard) {
     const scale = state === 'speaking' ? 1.01 : (state === 'thinking' ? 0.985 : 1.0);
     portraitCard.scale.set(scale, scale, 1);
-    portraitCard.position.y = 1.25 + Math.sin(t * 1.2) * 0.015;
+    const walkOffsetY = walking ? Math.sin(t * 7.2) * 0.012 : 0;
+    const walkOffsetX = walking ? Math.sin(t * 3.6) * 0.02 : 0;
+    portraitCard.position.y = 1.25 + Math.sin(t * 1.2) * 0.015 + walkOffsetY;
+    portraitCard.position.x = walkOffsetX;
+    portraitCard.rotation.x = breath;
+    portraitCard.rotation.y = Math.sin(t * 0.45) * 0.045 + (walking ? Math.sin(t * 3.2) * 0.05 : 0);
+    portraitCard.rotation.z = state === 'speaking' ? Math.sin(t * 6.0) * 0.008 : 0;
   }
 
   sideCards.forEach((card, i) => {
     card.position.y = 1.26 + Math.sin(t * (1.1 + i * 0.2) + i) * 0.012;
     card.rotation.z = Math.sin(t * 0.8 + i) * 0.04;
   });
-
-  if (spineBone) {
-    spineBone.rotation.x = breath;
-  }
-
-  if (headBone) {
-    if (state === 'speaking') {
-      headBone.rotation.x = Math.sin(t * 8.5) * 0.08;
-      headBone.rotation.y = Math.sin(t * 4.5) * 0.05;
-      headBone.rotation.z = Math.sin(t * 6.0) * 0.025;
-    } else if (state === 'thinking') {
-      headBone.rotation.x = -0.08 + Math.sin(t * 2.1) * 0.03;
-      headBone.rotation.y = Math.sin(t * 1.4) * 0.14;
-      headBone.rotation.z = Math.sin(t * 0.9) * 0.05;
-    } else {
-      headBone.rotation.x = Math.sin(t * 1.8) * 0.02;
-      headBone.rotation.y = Math.sin(t * 1.2) * 0.025;
-      headBone.rotation.z = 0;
-    }
-  }
 
   floorShadow.scale.setScalar(1 + Math.sin(t * 1.5) * 0.02);
 
