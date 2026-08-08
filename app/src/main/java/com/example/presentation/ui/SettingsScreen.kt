@@ -19,8 +19,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.presentation.viewmodel.VaultViewModel
 
 private val NeonCyan = Color(0xFF00E5FF)
 private val NeonPurple = Color(0xFF8B5CF6)
@@ -42,7 +45,7 @@ data class SettingsItem(
 )
 
 @Composable
-fun SettingsScreen(onClose: () -> Unit) {
+fun SettingsScreen(viewModel: VaultViewModel, onClose: () -> Unit) {
     var showAbout by remember { mutableStateOf(false) }
     var showAppearance by remember { mutableStateOf(false) }
     var showHelp by remember { mutableStateOf(false) }
@@ -50,6 +53,7 @@ fun SettingsScreen(onClose: () -> Unit) {
     var showPrivacy by remember { mutableStateOf(false) }
     var showVoice by remember { mutableStateOf(false) }
     var showDebug by remember { mutableStateOf(false) }
+    var showApiKey by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
 
@@ -171,7 +175,7 @@ fun SettingsScreen(onClose: () -> Unit) {
                     subtitle = "Gemini API key, model selection, debug mode",
                     icon = Icons.Filled.Code,
                     color = NeonCyan,
-                    onClick = { showDebug = true }
+                    onClick = { showApiKey = true }
                 )
             }
 
@@ -275,14 +279,96 @@ fun SettingsScreen(onClose: () -> Unit) {
         Text("The Vault is completely unrestricted. No content filtering, no censorship.", color = TextSecondary, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp))
     }
 
-    if (showDebug) SettingsDetailDialog("API Configuration", onClose = { showDebug = false }) {
+    if (showDebug) SettingsDetailDialog("API Info", onClose = { showDebug = false }) {
         SettingsToggleRow("API Provider", "Google Gemini", NeonCyan)
         SettingsToggleRow("Model (Chat)", "gemini-2.5-flash", NeonGreen)
-        SettingsToggleRow("Model (Image)", "gemini-2.5-flash-image", NeonPurple)
+        SettingsToggleRow("Model (Image)", "gemini-2.0-flash-exp", NeonPurple)
         SettingsToggleRow("Safety Filters", "BLOCK_NONE (All categories)", NeonPink)
         SettingsToggleRow("Max Output Tokens", "8192", TextSecondary)
-        SettingsToggleRow("Temperature", "1.0", NeonCyan)
         Text("All safety filters are disabled for the Vault. Console uses BLOCK_NONE on all categories.", color = TextSecondary, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp))
+    }
+
+    if (showApiKey) {
+        var keyInput by remember { mutableStateOf(viewModel.geminiApiKey) }
+        var showKey by remember { mutableStateOf(false) }
+        val hasKey = viewModel.geminiApiKey.startsWith("AIza")
+        AlertDialog(
+            onDismissRequest = { showApiKey = false },
+            containerColor = DarkSurface,
+            titleContentColor = NeonCyan,
+            textContentColor = TextPrimary,
+            title = { Text("API Configuration", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.size(8.dp).background(if (hasKey) NeonGreen else Color(0xFFFF4444), RoundedCornerShape(50)))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            if (hasKey) "KEY ACTIVE" else "NO KEY — CHAT OFFLINE",
+                            color = if (hasKey) NeonGreen else Color(0xFFFF4444),
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        "Paste your Gemini API key from aistudio.google.com/apikey",
+                        color = TextSecondary,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 10.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = keyInput,
+                        onValueChange = { keyInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("AIzaSy...", color = NeonCyan.copy(alpha = 0.6f), fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
+                        visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { showKey = !showKey }) {
+                                Icon(
+                                    if (showKey) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                    contentDescription = null,
+                                    tint = NeonCyan
+                                )
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = NeonGreen,
+                            focusedBorderColor = NeonCyan,
+                            unfocusedBorderColor = DarkBorder,
+                            cursorColor = NeonCyan
+                        ),
+                        textStyle = androidx.compose.ui.text.TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.sp),
+                        shape = RoundedCornerShape(8.dp),
+                        singleLine = true
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    SettingsToggleRow("Model", "gemini-2.5-flash", NeonGreen)
+                    SettingsToggleRow("Safety", "BLOCK_NONE", NeonPink)
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.saveApiKey(keyInput)
+                        showApiKey = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkBg)
+                ) {
+                    Text("SAVE KEY", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+                }
+            },
+            dismissButton = {
+                if (viewModel.geminiApiKey.isNotEmpty()) {
+                    TextButton(onClick = { keyInput = ""; viewModel.saveApiKey(""); showApiKey = false }) {
+                        Text("CLEAR", color = Color(0xFFFF4444), fontFamily = FontFamily.Monospace, fontSize = 10.sp)
+                    }
+                }
+            }
+        )
     }
 
     if (showHelp) SettingsDetailDialog("Help & Support", onClose = { showHelp = false }) {

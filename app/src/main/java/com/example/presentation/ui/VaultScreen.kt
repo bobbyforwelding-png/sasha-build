@@ -1473,7 +1473,7 @@ fun MainVaultDashboard(
     }
 
     if (showSettings) {
-        SettingsScreen(onClose = { showSettings = false })
+        SettingsScreen(viewModel = viewModel, onClose = { showSettings = false })
     }
 }
 
