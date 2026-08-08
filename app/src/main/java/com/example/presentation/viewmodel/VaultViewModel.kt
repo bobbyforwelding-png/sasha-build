@@ -62,7 +62,6 @@ class VaultViewModel @Inject constructor(
     application: Application,
     private val repository: VaultRepository
 ) : AndroidViewModel(application) {
-
     private val _uiState = MutableStateFlow(VaultUiState())
     val uiState: StateFlow<VaultUiState> = _uiState.asStateFlow()
 
@@ -100,9 +99,16 @@ class VaultViewModel @Inject constructor(
     }
 
     fun saveAvatarUrl(url: String) {
-        avatarUrl = url
-        getApplication<Application>().getSharedPreferences("sasha_vault", Context.MODE_PRIVATE)
-            .edit().putString("avatar_url", url).apply()
+        val normalizedUrl = url.trim().takeUnless { it.isEmpty() }
+        avatarUrl = normalizedUrl
+        getApplication<Application>().getSharedPreferences("sasha_vault", Context.MODE_PRIVATE).edit().apply {
+            if (normalizedUrl == null) {
+                remove("avatar_url")
+            } else {
+                putString("avatar_url", normalizedUrl)
+            }
+            apply()
+        }
     }
 
     private fun app(): Application = getApplication<Application>()
