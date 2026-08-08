@@ -363,12 +363,9 @@ class VaultViewModel @Inject constructor(
     private val consoleChatHistory = org.json.JSONArray()
 
     private fun decodeKey(): String {
-        val userKey = getApplication<Application>()
+        return getApplication<Application>()
             .getSharedPreferences("sasha_vault", Context.MODE_PRIVATE)
             .getString("gemini_api_key", "")?.trim() ?: ""
-        if (userKey.isNotEmpty()) return userKey
-        val encoded = "QVEuQWI4Uk42SW15LTNQZjdmUVQ1bG81eUszYjVrQkxNR3NJbVZ2eXNBbUoyVk9RZWRCWWc="
-        return android.util.Base64.decode(encoded, android.util.Base64.DEFAULT).let { String(it).trim() }
     }
 
     private suspend fun sendMessage(command: String): String = withContext(Dispatchers.IO) {
