@@ -17,11 +17,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.LocalTextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
 private val NeonCyan = Color(0xFF00E5FF)
 private val NeonPurple = Color(0xFF8B5CF6)
 private val NeonPink = Color(0xFFFF6B9D)
@@ -282,7 +282,46 @@ fun SettingsScreen(onClose: () -> Unit) {
         SettingsToggleRow("Safety Filters", "BLOCK_NONE (All categories)", NeonPink)
         SettingsToggleRow("Max Output Tokens", "8192", TextSecondary)
         SettingsToggleRow("Temperature", "1.0", NeonCyan)
-        Text("All safety filters are disabled for the Vault. Console uses BLOCK_NONE on all categories.", color = TextSecondary, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.padding(top = 8.dp))
+
+        Spacer(modifier = Modifier.height(12.dp))
+        val prefs = context.getSharedPreferences("sasha_vault", android.content.Context.MODE_PRIVATE)
+        var keyText by remember { mutableStateOf(prefs.getString("api_key", "") ?: "") }
+        OutlinedTextField(
+            value = keyText,
+            onValueChange = { keyText = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Gemini API Key", fontFamily = FontFamily.Monospace, fontSize = 12.sp) },
+            placeholder = { Text("Paste your key here", fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
+            textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp),
+            singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = NeonCyan,
+                unfocusedBorderColor = DarkBorder,
+                cursorColor = NeonCyan,
+                focusedTextColor = TextPrimary,
+                unfocusedTextColor = TextPrimary
+            )
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(
+                if (prefs.getString("api_key", null)?.isNotBlank() == true) "Custom key active" else "Using built-in key",
+                color = if (prefs.getString("api_key", null)?.isNotBlank() == true) NeonGreen else TextSecondary,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 10.sp,
+                modifier = Modifier.align(Alignment.CenterVertically)
+            )
+            Button(
+                onClick = {
+                    prefs.edit().putString("api_key", keyText.trim()).apply()
+                    showDebug = false
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkBg)
+            ) {
+                Text("SAVE", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 10.sp)
+            }
+        }
+        Text("Clear the field and hit SAVE to revert to the built-in key.", color = TextSecondary, fontFamily = FontFamily.Monospace, fontSize = 9.sp, modifier = Modifier.padding(top = 4.dp))
     }
 
     if (showHelp) SettingsDetailDialog("Help & Support", onClose = { showHelp = false }) {

@@ -111,6 +111,11 @@ class VaultViewModel @Inject constructor(
         }
     }
 
+    fun saveApiKey(key: String) {
+        getApplication<Application>().getSharedPreferences("sasha_vault", Context.MODE_PRIVATE)
+            .edit().putString("api_key", key.trim()).apply()
+    }
+
     private fun app(): Application = getApplication<Application>()
 
     private val functionTools by lazy {
@@ -348,6 +353,8 @@ class VaultViewModel @Inject constructor(
     private val consoleChatHistory = org.json.JSONArray()
 
     private fun decodeKey(): String {
+        val prefs = getApplication<Application>().getSharedPreferences("sasha_vault", Context.MODE_PRIVATE)
+        prefs.getString("api_key", null)?.takeIf { it.isNotBlank() }?.let { return it }
         val encoded = "QVEuQWI4Uk42SW15LTNQZjdmUVQ1bG81eUszYjVrQkxNR3NJbVZ2eXNBbUoyVk9RZWRCWWc="
         return android.util.Base64.decode(encoded, android.util.Base64.DEFAULT).let { String(it).trim() }
     }
