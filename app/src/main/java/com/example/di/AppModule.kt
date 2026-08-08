@@ -12,9 +12,15 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import dagger.hilt.android.qualifiers.ApplicationContext
 import android.content.Context
+import javax.inject.Qualifier
 import javax.inject.Singleton
+import com.example.BuildConfig
 import com.example.domain.repository.VaultRepository
 import com.example.data.repository.VaultRepositoryImpl
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class GeminiApiKey
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -25,6 +31,11 @@ object AppModule {
     fun provideVaultRepository(@ApplicationContext context: Context): VaultRepository {
         return VaultRepositoryImpl(context)
     }
+
+    @Provides
+    @Singleton
+    @GeminiApiKey
+    fun provideGeminiApiKey(): String = BuildConfig.GEMINI_API_KEY
 
     @Provides
     @Singleton
