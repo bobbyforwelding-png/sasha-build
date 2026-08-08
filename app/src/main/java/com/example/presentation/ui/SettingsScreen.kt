@@ -17,7 +17,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -292,7 +291,7 @@ fun SettingsScreen(onClose: () -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             label = { Text("Gemini API Key", fontFamily = FontFamily.Monospace, fontSize = 12.sp) },
             placeholder = { Text("Paste your key here", fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
-            textStyle = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp),
+            textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp),
             singleLine = true,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = NeonCyan,
