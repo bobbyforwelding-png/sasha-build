@@ -13,9 +13,9 @@ View your app in AI Studio: https://ai.studio/apps/8d6d1051-a79f-4d81-b309-d7e78
 **Prerequisites:** [Android Studio](https://developer.android.com/studio)
 
 1. Open Android Studio
-2. Select **Open** and choose `/home/runner/work/sasha-build/sasha-build`
+2. Select **Open** and choose your cloned project directory
 3. Allow Android Studio to complete Gradle sync
-4. Create `/home/runner/work/sasha-build/sasha-build/local.properties` with:
+4. Create `local.properties` in the project root with:
    - `GEMINI_API_KEY=your_api_key_here`
    - (optional) `sdk.dir=/path/to/Android/Sdk`
 5. Run the app on an emulator or physical device
